@@ -58,7 +58,7 @@ extern network_info_t NetworkInfo;
 extern network_request_table_t request_table[NETWORK_REQUEST_TYPE_MAX];
 
 /*****************************************************************************
- * 	Extern Functions 
+ * 	Extern Functions
  *****************************************************************************/
 
 /*****************************************************************************
@@ -640,7 +640,9 @@ int _net_invoke_dbus_method_nonblock(const char* dest, const char* path,
 	g_dbus_connection_call(h_connection.signal_conn,
 			dest, path, interface_name,
 			method, NULL, NULL,
-			G_DBUS_CALL_FLAGS_NONE, -1, h_connection.cancellable,
+			G_DBUS_CALL_FLAGS_NONE,
+			DBUS_REPLY_TIMEOUT,
+			h_connection.cancellable,
 			(GAsyncReadyCallback) notify_func, NULL);
 
 	if (notify_func) {
@@ -1267,7 +1269,7 @@ int _net_dbus_set_profile_ipv4(net_profile_info_t* prof_info, char* profile_name
 	const char *prop_method = "Method";
 	const char *prop_address = "Address";
 	const char *prop_gateway = "Gateway";
-	const char *prop_netmask = "Netmask";	
+	const char *prop_netmask = "Netmask";
 
 	char ip_buffer[NETPM_IPV4_STR_LEN_MAX+1] = "";
 	char netmask_buffer[NETPM_IPV4_STR_LEN_MAX+1] = "";
