@@ -30,40 +30,11 @@
 #define DBUS_REPLY_TIMEOUT (120 * 1000)
 
 /*****************************************************************************
- * 	Global Functions
- *****************************************************************************/
-
-/*****************************************************************************
- * 	Global Variables
- *****************************************************************************/
-extern handle_connection h_connection;
-
-/* TODO: If 'pcall' is not required, we can just have the gboolean instead of
- * below struct
- */
-struct dbus_pending_call_data {
-	void *pcall;
-	gboolean is_used;
-};
-
-static struct dbus_pending_call_data network_dbus_pending_call_data = {
-	NULL,
-	FALSE
-};
-
-/*****************************************************************************
  * 	Extern Variables
  *****************************************************************************/
 extern network_info_t NetworkInfo;
 extern network_request_table_t request_table[NETWORK_REQUEST_TYPE_MAX];
 
-/*****************************************************************************
- * 	Extern Functions 
- *****************************************************************************/
-
-/*****************************************************************************
- * 	Local Functions Definition
- *****************************************************************************/
 static int __net_error_string_to_enum(const char* error)
 {
 	NETWORK_LOG(NETWORK_HIGH, "Passed error value [%s]\n", error);
@@ -234,8 +205,7 @@ static void __net_open_connection_reply(GObject *source_object, GAsyncResult *re
 	}
 
 done:
-	network_dbus_pending_call_data.is_used = FALSE;
-	network_dbus_pending_call_data.pcall = NULL;
+	_net_dbus_pending_call_unref();
 
 	if (callback_flag)
 		_net_client_callback(&event_data);
@@ -298,8 +268,7 @@ static void __net_close_connection_reply(GObject *source_object, GAsyncResult *r
 	}
 
 done:
-	network_dbus_pending_call_data.is_used = FALSE;
-	network_dbus_pending_call_data.pcall = NULL;
+	_net_dbus_pending_call_unref();
 
 	if (callback_flag)
 		_net_client_callback(&event_data);
@@ -354,8 +323,7 @@ static void __net_wifi_power_reply(GObject *source_object, GAsyncResult *res, gp
 		callback_flag = TRUE;
 	}
 
-	network_dbus_pending_call_data.is_used = FALSE;
-	network_dbus_pending_call_data.pcall = NULL;
+	_net_dbus_pending_call_unref();
 
 	if (callback_flag)
 		_net_client_callback(&event_data);
@@ -410,8 +378,7 @@ static void __net_specific_scan_wifi_reply(GObject *source_object, GAsyncResult 
 		callback_flag = TRUE;
 	}
 
-	network_dbus_pending_call_data.is_used = FALSE;
-	network_dbus_pending_call_data.pcall = NULL;
+	_net_dbus_pending_call_unref();
 
 	if (callback_flag)
 		_net_client_callback(&event_data);
@@ -466,8 +433,7 @@ static void __net_set_default_reply(GObject *source_object, GAsyncResult *res, g
 		callback_flag = TRUE;
 	}
 
-	network_dbus_pending_call_data.is_used = FALSE;
-	network_dbus_pending_call_data.pcall = NULL;
+	_net_dbus_pending_call_unref();
 
 	if (dbus_result)
 		g_variant_unref(dbus_result);
@@ -539,6 +505,11 @@ static int __net_dbus_set_agent_field(const char *key, const char *value)
 	GVariant *reply = NULL;
 	GVariant *params = NULL;
 	GVariantBuilder *builder;
+	GDBusConnection *connection;
+
+	connection = _net_dbus_get_gdbus_conn();
+	if (connection == NULL)
+		return NET_ERR_APP_NOT_REGISTERED;
 
 	builder = g_variant_builder_new(G_VARIANT_TYPE ("a{ss}"));
 	g_variant_builder_add(builder, "{ss}", key, value);
@@ -546,14 +517,17 @@ static int __net_dbus_set_agent_field(const char *key, const char *value)
 	params = g_variant_new("(@a{ss})", g_variant_builder_end(builder));
 	g_variant_builder_unref(builder);
 
-	reply = g_dbus_connection_call_sync(h_connection.signal_conn,
+	reply = g_dbus_connection_call_sync(connection,
 					NETCONFIG_SERVICE,
 					NETCONFIG_WIFI_PATH,
 					CONNMAN_AGENT_INTERFACE,
-					"SetField", params, NULL,
+					"SetField",
+					params,
+					NULL,
 					G_DBUS_CALL_FLAGS_NONE,
 					DBUS_REPLY_TIMEOUT,
-					h_connection.cancellable, &error);
+					_net_dbus_get_gdbus_cancellable(),
+					&error);
 	if (reply == NULL) {
 		if (error != NULL) {
 			NETWORK_LOG(NETWORK_ERROR,
@@ -586,18 +560,29 @@ GVariant *_net_invoke_dbus_method(const char* dest, const char* path,
 
 	GError *error = NULL;
 	GVariant *reply = NULL;
-
 	*dbus_error = NET_ERR_NONE;
+	GDBusConnection *connection;
+
+	connection = _net_dbus_get_gdbus_conn();
+	if (connection == NULL) {
+		NETWORK_LOG(NETWORK_ERROR, "GDBusconnection is NULL\n");
+		return reply;
+	}
 
 	NETWORK_LOG(NETWORK_HIGH, "[DBUS Sync] %s.%s, %s\n",
 			interface_name, method, path);
 
-	reply = g_dbus_connection_call_sync(h_connection.signal_conn,
-					dest, path, interface_name,
-					method, params, NULL,
+	reply = g_dbus_connection_call_sync(connection,
+					dest,
+					path,
+					interface_name,
+					method,
+					params,
+					NULL,
 					G_DBUS_CALL_FLAGS_NONE,
 					DBUS_REPLY_TIMEOUT,
-					h_connection.cancellable, &error);
+					_net_dbus_get_gdbus_cancellable(),
+					&error);
 	if (reply == NULL) {
 		if (error != NULL) {
 			NETWORK_LOG(NETWORK_ERROR,
@@ -625,23 +610,32 @@ int _net_invoke_dbus_method_nonblock(const char* dest, const char* path,
 {
 	__NETWORK_FUNC_ENTER__;
 
+	GDBusConnection *connection;
+
+	connection = _net_dbus_get_gdbus_conn();
+	if (connection == NULL) {
+		NETWORK_LOG(NETWORK_ERROR, "GDBusconnection is NULL\n");
+		return NET_ERR_APP_NOT_REGISTERED;
+	}
+
 	NETWORK_LOG(NETWORK_HIGH, "[DBUS Async] %s.%s, %s\n",
 			interface_name, method, path);
 
-	if (h_connection.signal_conn == NULL)
-		return NET_ERR_APP_NOT_REGISTERED;
+	g_dbus_connection_call(connection,
+				dest,
+				path,
+				interface_name,
+				method,
+				NULL,
+				NULL,
+				G_DBUS_CALL_FLAGS_NONE,
+				DBUS_REPLY_TIMEOUT,
+				_net_dbus_get_gdbus_cancellable(),
+				(GAsyncReadyCallback) notify_func,
+				NULL);
 
-	g_dbus_connection_call(h_connection.signal_conn,
-			dest, path, interface_name,
-			method, NULL, NULL,
-			G_DBUS_CALL_FLAGS_NONE, -1, h_connection.cancellable,
-			(GAsyncReadyCallback) notify_func, NULL);
-
-	if (notify_func) {
-		/* TODO: Need to check if 'pcall' needs to be used */
-		network_dbus_pending_call_data.pcall = NULL;
-		network_dbus_pending_call_data.is_used = TRUE;
-	}
+	if (notify_func != NULL)
+		_net_dbus_pending_call_ref();
 
 	__NETWORK_FUNC_EXIT__;
 	return NET_ERR_NONE;
@@ -722,7 +716,7 @@ int _net_dbus_set_bgscan_mode(net_wifi_background_scan_mode_t mode)
 	if (Error != NET_ERR_NONE)
 		NETWORK_LOG(NETWORK_ERROR, "_net_invoke_dbus_method failed\n");
 
-	if (message)
+	if (message != NULL)
 		g_variant_unref(message);
 
 	__NETWORK_FUNC_EXIT__;
@@ -1021,6 +1015,8 @@ static void __net_create_config_reply(GObject *source_object,
 	if (dbus_result)
 		g_variant_unref(dbus_result);
 
+	_net_dbus_pending_call_unref();
+
 	__NETWORK_FUNC_EXIT__;
 }
 
@@ -1031,6 +1027,11 @@ int _net_dbus_set_eap_config_fields(
 
 	GVariant *params = NULL;
 	GVariantBuilder *builder;
+	GDBusConnection *connection;
+
+	connection = _net_dbus_get_gdbus_conn();
+	if (connection == NULL)
+		return NET_ERR_APP_NOT_REGISTERED;
 
 	builder = g_variant_builder_new(G_VARIANT_TYPE ("a{ss}"));
 
@@ -1079,13 +1080,22 @@ int _net_dbus_set_eap_config_fields(
 	params = g_variant_new("(@a{ss})", g_variant_builder_end(builder));
 	g_variant_builder_unref(builder);
 
-	g_dbus_connection_call(h_connection.signal_conn,
-			NETCONFIG_SERVICE, NETCONFIG_WIFI_PATH, NETCONFIG_WIFI_INTERFACE,
-			"CreateConfig", params, NULL,
-			G_DBUS_CALL_FLAGS_NONE, -1, h_connection.cancellable,
-			(GAsyncReadyCallback)__net_create_config_reply, NULL);
+	g_dbus_connection_call(connection,
+				NETCONFIG_SERVICE,
+				NETCONFIG_WIFI_PATH,
+				NETCONFIG_WIFI_INTERFACE,
+				"CreateConfig",
+				params,
+				NULL,
+				G_DBUS_CALL_FLAGS_NONE,
+				DBUS_REPLY_TIMEOUT,
+				_net_dbus_get_gdbus_cancellable(),
+				(GAsyncReadyCallback)__net_create_config_reply,
+				NULL);
 
 	NETWORK_LOG(NETWORK_HIGH, "Successfully sent eap config fields\n");
+
+	_net_dbus_pending_call_ref();
 
 	__NETWORK_FUNC_EXIT__;
 	return NET_ERR_NONE;
@@ -1255,7 +1265,7 @@ int _net_dbus_set_profile_ipv4(net_profile_info_t* prof_info, char* profile_name
 	const char *prop_method = "Method";
 	const char *prop_address = "Address";
 	const char *prop_gateway = "Gateway";
-	const char *prop_netmask = "Netmask";	
+	const char *prop_netmask = "Netmask";
 
 	char ip_buffer[NETPM_IPV4_STR_LEN_MAX+1] = "";
 	char netmask_buffer[NETPM_IPV4_STR_LEN_MAX+1] = "";
@@ -1269,6 +1279,11 @@ int _net_dbus_set_profile_ipv4(net_profile_info_t* prof_info, char* profile_name
 	GVariant *reply = NULL;
 	GVariant *params = NULL;
 	GVariantBuilder *builder;
+	GDBusConnection *connection;
+
+	connection = _net_dbus_get_gdbus_conn();
+	if (connection == NULL)
+		return NET_ERR_APP_NOT_REGISTERED;
 
 	if ((prof_info == NULL) || (profile_name == NULL) || (strlen(profile_name) == 0)) {
 		NETWORK_LOG(NETWORK_ERROR, "Invalid argument\n");
@@ -1333,22 +1348,27 @@ int _net_dbus_set_profile_ipv4(net_profile_info_t* prof_info, char* profile_name
 	params = g_variant_new("(sv)", prop_ipv4_configuration, g_variant_builder_end(builder));
 	g_variant_builder_unref(builder);
 
-	reply = g_dbus_connection_call_sync(h_connection.signal_conn,
+	reply = g_dbus_connection_call_sync(connection,
 					CONNMAN_SERVICE,
 					profile_name,
 					CONNMAN_SERVICE_INTERFACE,
-					"SetProperty", params, NULL,
-					G_DBUS_CALL_FLAGS_NONE, DBUS_REPLY_TIMEOUT, h_connection.cancellable, &error);
+					"SetProperty",
+					params,
+					NULL,
+					G_DBUS_CALL_FLAGS_NONE,
+					DBUS_REPLY_TIMEOUT,
+					_net_dbus_get_gdbus_cancellable(),
+					&error);
 	if (reply == NULL) {
 		if (error != NULL) {
 			NETWORK_LOG(NETWORK_ERROR,
-						"g_dbus_connection_call_sync() failed."
-						"error [%d: %s]\n", error->code, error->message);
+				"g_dbus_connection_call_sync() failed."
+				"error [%d: %s]\n", error->code, error->message);
 			Error = __net_error_string_to_enum(error->message);
 			g_error_free(error);
 		} else {
 			NETWORK_LOG(NETWORK_ERROR,
-					"g_dbus_connection_call_sync() failed.\n");
+				"g_dbus_connection_call_sync() failed.\n");
 		}
 
 		__NETWORK_FUNC_EXIT__;
@@ -1377,6 +1397,11 @@ int _net_dbus_set_profile_dns(net_profile_info_t* prof_info, char* profile_name)
 	GVariant *params = NULL;
 	GVariantBuilder *builder;
 	int i = 0;
+	GDBusConnection *connection;
+
+	connection = _net_dbus_get_gdbus_conn();
+	if (connection == NULL)
+		return NET_ERR_APP_NOT_REGISTERED;
 
 	if ((prof_info == NULL) || (profile_name == NULL) || (strlen(profile_name) == 0) ||
 	    (prof_info->ProfileInfo.Wlan.net_info.DnsCount > NET_DNS_ADDR_MAX))	{
@@ -1391,8 +1416,8 @@ int _net_dbus_set_profile_dns(net_profile_info_t* prof_info, char* profile_name)
 
 		if (prof_info->ProfileInfo.Wlan.net_info.DnsAddr[i].Data.Ipv4.s_addr != 0)
 			g_strlcpy(dns_buffer[i],
-					inet_ntoa(prof_info->ProfileInfo.Wlan.net_info.DnsAddr[i].Data.Ipv4),
-					NETPM_IPV4_STR_LEN_MAX + 1);
+				inet_ntoa(prof_info->ProfileInfo.Wlan.net_info.DnsAddr[i].Data.Ipv4),
+				NETPM_IPV4_STR_LEN_MAX + 1);
 
 		dns_address[i] = dns_buffer[i];
 	}
@@ -1405,27 +1430,30 @@ int _net_dbus_set_profile_dns(net_profile_info_t* prof_info, char* profile_name)
 			g_variant_builder_add(builder, "s", dns_address[i]);
 		}
 
-		params = g_variant_new("(sv)", prop_nameserver_configuration, g_variant_builder_end(builder));
+		params = g_variant_new("(sv)",prop_nameserver_configuration, g_variant_builder_end(builder));
 		g_variant_builder_unref(builder);
 
-		reply = g_dbus_connection_call_sync(h_connection.signal_conn,
+		reply = g_dbus_connection_call_sync(connection,
 						CONNMAN_SERVICE,
 						profile_name,
 						CONNMAN_SERVICE_INTERFACE,
-						"SetProperty", params, NULL,
+						"SetProperty",
+						params,
+						NULL,
 						G_DBUS_CALL_FLAGS_NONE,
 						DBUS_REPLY_TIMEOUT,
-						h_connection.cancellable, &error);
+						_net_dbus_get_gdbus_cancellable(),
+						&error);
 		if (reply == NULL) {
 			if (error != NULL) {
 				NETWORK_LOG(NETWORK_ERROR,
-							"g_dbus_connection_call_sync() failed."
-							"error [%d: %s]\n", error->code, error->message);
+					"g_dbus_connection_call_sync() failed."
+					"error [%d: %s]\n", error->code, error->message);
 				Error = __net_error_string_to_enum(error->message);
 				g_error_free(error);
 			} else {
 				NETWORK_LOG(NETWORK_ERROR,
-						"g_dbus_connection_call_sync() failed.\n");
+					"g_dbus_connection_call_sync() failed.\n");
 			}
 
 			__NETWORK_FUNC_EXIT__;
@@ -1463,6 +1491,11 @@ int _net_dbus_set_proxy(net_profile_info_t* prof_info, char* profile_name)
 	GVariant *params = NULL;
 	GVariantBuilder *builder;
 	GVariantBuilder *builder_sub;
+	GDBusConnection *connection;
+
+	connection = _net_dbus_get_gdbus_conn();
+	if (connection == NULL)
+		return NET_ERR_APP_NOT_REGISTERED;
 
 	if ((prof_info == NULL) || (profile_name == NULL) || (strlen(profile_name) == 0)) {
 		NETWORK_LOG(NETWORK_ERROR, "Invalid argument\n");
@@ -1506,22 +1539,27 @@ int _net_dbus_set_proxy(net_profile_info_t* prof_info, char* profile_name)
 	params = g_variant_new("(sv)", prop_proxy_configuration, g_variant_builder_end(builder));
 	g_variant_builder_unref(builder);
 
-	reply = g_dbus_connection_call_sync(h_connection.signal_conn,
-						CONNMAN_SERVICE,
-						profile_name,
-						CONNMAN_SERVICE_INTERFACE,
-						"SetProperty", params, NULL,
-						G_DBUS_CALL_FLAGS_NONE, DBUS_REPLY_TIMEOUT, h_connection.cancellable, &error);
+	reply = g_dbus_connection_call_sync(connection,
+					CONNMAN_SERVICE,
+					profile_name,
+					CONNMAN_SERVICE_INTERFACE,
+					"SetProperty",
+					params,
+					NULL,
+					G_DBUS_CALL_FLAGS_NONE,
+					DBUS_REPLY_TIMEOUT,
+					_net_dbus_get_gdbus_cancellable(),
+					&error);
 	if (reply == NULL) {
 		if (error != NULL) {
 			NETWORK_LOG(NETWORK_ERROR,
-						"g_dbus_connection_call_sync() failed."
-						"error [%d: %s]\n", error->code, error->message);
+				"g_dbus_connection_call_sync() failed."
+				"error [%d: %s]\n", error->code, error->message);
 			Error = __net_error_string_to_enum(error->message);
 			g_error_free(error);
 		} else {
 			NETWORK_LOG(NETWORK_ERROR,
-					"g_dbus_connection_call_sync() failed.\n");
+				"g_dbus_connection_call_sync() failed.\n");
 		}
 
 		__NETWORK_FUNC_EXIT__;
@@ -1558,6 +1596,11 @@ int _net_dbus_add_pdp_profile(net_profile_info_t *prof_info)
 	GVariant *reply = NULL;
 	GVariant *params = NULL;
 	GVariantBuilder *builder;
+	GDBusConnection *connection;
+
+	connection = _net_dbus_get_gdbus_conn();
+	if (connection == NULL)
+		return NET_ERR_APP_NOT_REGISTERED;
 
 	if (prof_info == NULL) {
 		NETWORK_LOG(NETWORK_ERROR, "Invalid argument\n");
@@ -1633,24 +1676,27 @@ int _net_dbus_add_pdp_profile(net_profile_info_t *prof_info)
 	params = g_variant_new("(@a{ss})", g_variant_builder_end(builder));
 	g_variant_builder_unref(builder);
 
-	reply = g_dbus_connection_call_sync(h_connection.signal_conn,
+	reply = g_dbus_connection_call_sync(connection,
 					TELEPHONY_SERVICE,
 					TELEPHONY_MASTER_PATH,
 					TELEPHONY_MASTER_INTERFACE,
-					"AddProfile", params, NULL,
+					"AddProfile",
+					params,
+					NULL,
 					G_DBUS_CALL_FLAGS_NONE,
 					DBUS_REPLY_TIMEOUT,
-					h_connection.cancellable, &error);
+					_net_dbus_get_gdbus_cancellable(),
+					&error);
 	if (reply == NULL) {
 		if (error != NULL) {
 			NETWORK_LOG(NETWORK_ERROR,
-						"g_dbus_connection_call_sync() failed."
-						"error [%d: %s]\n", error->code, error->message);
+				"g_dbus_connection_call_sync() failed."
+				"error [%d: %s]\n", error->code, error->message);
 			Error = __net_error_string_to_enum(error->message);
 			g_error_free(error);
 		} else {
 			NETWORK_LOG(NETWORK_ERROR,
-					"g_dbus_connection_call_sync() failed.\n");
+				"g_dbus_connection_call_sync() failed.\n");
 		}
 
 		__NETWORK_FUNC_EXIT__;
@@ -1699,16 +1745,21 @@ int _net_dbus_modify_pdp_profile(net_profile_info_t *prof_info, const char *prof
 	char buff_auth_type[10] = "";
 	char *temp_ptr = NULL;
 
+	GError *error = NULL;
+	GVariant *reply = NULL;
+	GVariant *params = NULL;
+	GVariantBuilder *builder;
+	GDBusConnection *connection;
+
+	connection = _net_dbus_get_gdbus_conn();
+	if (connection == NULL)
+		return NET_ERR_APP_NOT_REGISTERED;
+
 	if ((prof_info == NULL) || (profile_name == NULL)) {
 		NETWORK_LOG(NETWORK_ERROR, "Invalid argument\n");
 		__NETWORK_FUNC_EXIT__;
 		return NET_ERR_INVALID_PARAM;
 	}
-
-	GError *error = NULL;
-	GVariant *reply = NULL;
-	GVariant *params = NULL;
-	GVariantBuilder *builder;
 
 	NETWORK_LOG(NETWORK_HIGH, "DBus Message 1/2 : %s %s %s %s\n", TELEPHONY_SERVICE,
 			profile_name, TELEPHONY_PROFILE_INTERFACE, ".ModifyProfile");
@@ -1802,19 +1853,22 @@ int _net_dbus_modify_pdp_profile(net_profile_info_t *prof_info, const char *prof
 	params = g_variant_new("(@a{ss})", g_variant_builder_end(builder));
 	g_variant_builder_unref(builder);
 
-	reply = g_dbus_connection_call_sync(h_connection.signal_conn,
+	reply = g_dbus_connection_call_sync(connection,
 					TELEPHONY_SERVICE,
 					profile_name,
 					TELEPHONY_PROFILE_INTERFACE,
-					"ModifyProfile", params, NULL,
+					"ModifyProfile",
+					params,
+					NULL,
 					G_DBUS_CALL_FLAGS_NONE,
 					DBUS_REPLY_TIMEOUT,
-					h_connection.cancellable, &error);
+					_net_dbus_get_gdbus_cancellable(),
+					&error);
 	if (reply == NULL) {
 		if (error != NULL) {
 			NETWORK_LOG(NETWORK_ERROR,
-						"g_dbus_connection_call_sync() failed."
-						"error [%d: %s]\n", error->code, error->message);
+				"g_dbus_connection_call_sync() failed."
+				"error [%d: %s]\n", error->code, error->message);
 			Error = __net_error_string_to_enum(error->message);
 			g_error_free(error);
 		} else {
@@ -1870,37 +1924,6 @@ int _net_dbus_remove_wifi_driver(void)
 	return Error;
 }
 
-gboolean _net_dbus_is_pending_call_used(void)
-{
-	return network_dbus_pending_call_data.is_used;
-}
-
-void _net_dbus_set_pending_call_used(gboolean used)
-{
-	network_dbus_pending_call_data.is_used = used;
-}
-#if 0
-DBusPendingCall *_net_dbus_get_pending_call(void)
-{
-	return network_dbus_pending_call_data.pcall;
-}
-#endif
-void _net_dbus_set_pending_call(void *call)
-{
-	network_dbus_pending_call_data.pcall = call;
-}
-
-void _net_dbus_clear_pending_call(void)
-{
-	if (_net_dbus_is_pending_call_used()) {
-		//dbus_pending_call_cancel(_net_dbus_get_pending_call());
-		//g_cancellable_cancel(h_connection.cancellable);
-
-		_net_dbus_set_pending_call(NULL);
-		_net_dbus_set_pending_call_used(FALSE);
-	}
-}
-
 gboolean __net_dbus_abort_open_request(const char *profile_name)
 {
 	__NETWORK_FUNC_ENTER__;
@@ -1919,7 +1942,7 @@ gboolean __net_dbus_abort_open_request(const char *profile_name)
 
 		event_data.Event = NET_EVENT_OPEN_RSP;
 		g_strlcpy(event_string, "Sending NET_EVENT_OPEN_RSP", 64);
-		_net_dbus_clear_pending_call();
+		_net_dbus_pending_call_unref();
 	} else if (request_table[NETWORK_REQUEST_TYPE_ENROLL_WPS].flag == TRUE &&
 	           strcmp(profile_name, svc_name2) == 0) {
 
@@ -1928,7 +1951,7 @@ gboolean __net_dbus_abort_open_request(const char *profile_name)
 
 		event_data.Event = NET_EVENT_WIFI_WPS_RSP;
 		g_strlcpy(event_string, "Sending NET_EVENT_WIFI_WPS_RSP", 64);
-		_net_dbus_clear_pending_call();
+		_net_dbus_pending_call_unref();
 	} else {
 		__NETWORK_FUNC_EXIT__;
 		return FALSE;
@@ -1951,24 +1974,30 @@ int _net_dbus_specific_scan_request(const char *ssid)
 	__NETWORK_FUNC_ENTER__;
 
 	GVariant *params = NULL;
+	GDBusConnection *connection;
+
+	connection = _net_dbus_get_gdbus_conn();
+	if (connection == NULL)
+		return NET_ERR_APP_NOT_REGISTERED;
 
 	params = g_variant_new("(s)", ssid);
 
-	g_dbus_connection_call(h_connection.signal_conn,
+	g_dbus_connection_call(connection,
 			NETCONFIG_SERVICE,
 			NETCONFIG_WIFI_PATH,
 			NETCONFIG_WIFI_INTERFACE,
-			"RequestSpecificScan", params, NULL,
+			"RequestSpecificScan",
+			params,
+			NULL,
 			G_DBUS_CALL_FLAGS_NONE,
 			6 * DBUS_REPLY_TIMEOUT,
-			h_connection.cancellable,
-			(GAsyncReadyCallback) __net_specific_scan_wifi_reply, NULL);
+			_net_dbus_get_gdbus_cancellable(),
+			(GAsyncReadyCallback) __net_specific_scan_wifi_reply,
+			NULL);
 
 	NETWORK_LOG(NETWORK_HIGH, "Successfully configured\n");
 
-	/* TODO: Check if anything needs to be assigned to 'pcall' */
-	network_dbus_pending_call_data.pcall = NULL;
-	network_dbus_pending_call_data.is_used = TRUE;
+	_net_dbus_pending_call_ref();
 
 	__NETWORK_FUNC_EXIT__;
 	return NET_ERR_NONE;
