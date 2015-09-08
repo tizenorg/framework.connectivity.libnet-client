@@ -1,31 +1,35 @@
 /*
- *  Network Client Library
+ * Network Client Library
  *
-* Copyright 2012  Samsung Electronics Co., Ltd
-
-* Licensed under the Flora License, Version 1.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-
-* http://www.tizenopensource.org/license
-
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
+ * Copyright 2012 Samsung Electronics Co., Ltd
+ *
+ * Licensed under the Flora License, Version 1.1 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.tizenopensource.org/license
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
  */
 
- 
 #ifndef __NETWORK_PM_INTF_H__
 #define __NETWORK_PM_INTF_H__
 
+#include "network-pm-wlan.h"
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif /* __cplusplus */
+
+#ifndef DEPRECATED
+#define DEPRECATED __attribute__((deprecated))
+#endif
 
 /**
  * @file network-pm-intf.h
@@ -36,15 +40,6 @@ extern "C"
  * \addtogroup  profile_managing
  * \{
 */
-
-#ifndef DEPRECATED
-#define DEPRECATED __attribute__((deprecated))
-#endif
-/*==================================================================================================
-                                         INCLUDE FILES
-==================================================================================================*/
-
-#include "network-pm-wlan.h"
 
 /*==================================================================================================
                                            CONSTANTS
@@ -94,6 +89,21 @@ typedef enum
 	NET_STATE_TYPE_DISCONNECT,
 } net_state_type_t;
 
+/**
+ * @enum net_state_error_type_t
+ * This enumeration defines the service error state type.
+ */
+typedef enum
+{
+	NET_STATE_ERROR_NONE			= 0x00,
+	NET_STATE_ERROR_OUT_OF_RANGE	= 0x01,
+	NET_STATE_ERROR_PIN_MISSING		= 0x02,
+	NET_STATE_ERROR_DHCP_FAILED		= 0x03,
+	NET_STATE_ERROR_CONNECT_FAILED	= 0x04,
+	NET_STATE_ERROR_LOGIN_FAILED	= 0x05,
+	NET_STATE_ERROR_AUTH_FAILED		= 0x06,
+	NET_STATE_ERROR_INVALID_KEY		= 0x07,
+} net_error_state_type_t;
 
 /*==================================================================================================
                                  STRUCTURES AND OTHER TYPEDEFS
@@ -127,6 +137,14 @@ typedef struct
 	/** This will be deprecated */
 	char SetupRequired;
 
+	char Keyword[NET_PDP_APN_LEN_MAX+1];
+	char Hidden;
+	char Editable;
+	char DefaultConn;
+
+	/** Modem object path for PS cellular profile */
+	char			PSModemPath[NET_PROFILE_NAME_LEN_MAX + 1];
+
 	/** network information */
 	net_dev_info_t net_info;
 } net_pdp_profile_info_t;
@@ -141,16 +159,27 @@ typedef struct
 } net_eth_profile_info_t;
 
 /**
+ * Profile data structures: Bluetooth Interface
+ */
+typedef struct
+{
+	/** network information */
+	net_dev_info_t net_info;
+} net_bt_profile_info_t;
+
+/**
  * Specific profile information related to each technology type
  */
 typedef union
 {
 	/** PDP Profile Information */
-	net_pdp_profile_info_t       Pdp;
+	net_pdp_profile_info_t		Pdp;
 	/** Wifi Profile Information */
-	net_wifi_profile_info_t      Wlan;
-	/** Wifi Profile Information */
-	net_eth_profile_info_t       Ethernet;
+	net_wifi_profile_info_t		Wlan;
+	/** Ethernet Profile Information */
+	net_eth_profile_info_t		Ethernet;
+	/** Bluetooth Profile Information */
+	net_bt_profile_info_t		Bluetooth;
 } net_specific_profile_info_t;
 
 /**
@@ -159,15 +188,17 @@ typedef union
 typedef struct
 {
 	/** Device Type of the profile */
-	net_device_t  	profile_type;
+	net_device_t				profile_type;
 	/** Profile name */
-	char	ProfileName[NET_PROFILE_NAME_LEN_MAX+1];
+	char						ProfileName[NET_PROFILE_NAME_LEN_MAX+1];
 	/** Specific profile information */
-	net_specific_profile_info_t ProfileInfo;
+	net_specific_profile_info_t	ProfileInfo;
 	/** Service state */
-	net_state_type_t        ProfileState;
+	net_state_type_t			ProfileState;
+	/** Service error state */
+	net_error_state_type_t		ProfileErrorState;
 	/** Favourite flag */
-	char Favourite;
+	char						Favourite;
 } net_profile_info_t;
 
 /*
@@ -210,14 +241,59 @@ typedef struct
  * \par Example of how this function would be called:
  *
  * net_profile_info_t prof_info;\n
- * int result; \n
- * result = net_add_profile( NET_SERVICE_MMS, &prof_info ); \n
+ * int result;\n
+ * result = net_add_profile(NET_SERVICE_MMS, &prof_info);\n
  * if(result == NET_ERR_NONE)
  *
 ******************************************************************************************/
 int net_add_profile(net_service_type_t network_type, net_profile_info_t *prof_info);
 
 /*****************************************************************************************/
+
+/* net_reset_profile API function prototype
+ * int net_reset_profile(int type, int sim_id);
+ */
+
+/**
+ * \brief 	Reset to default Profile.
+ *              (0 : Return to Default , 1: Delete profile)
+ *
+ * \par Sync (or) Async:
+ * This is a Asynchronous API.
+ *
+ * \par Important Notes:
+ *
+ * \warning
+ *  None
+ *
+ * \param[in]   type        Reset style
+ *
+ * \par Async Response Message:
+ *        None.
+ *
+ * \return Return Type (int) \n
+ * - NET_ERR_NONE  - indicating that the operation has completed successfully.
+ * - NET_ERR_INVALID_PARAM - Invalid parameter
+ * - NET_ERR_UNKNOWN - Any other error
+ * - NET_ERR_IN_PROGRESS - Already in progress
+ * - NET_ERR_APP_NOT_REGISTERED - Client is invalid may be unregistered
+ *
+ * \par Prospective Clients:
+ * Network Connection Setting Applet, WLAN Setting UI Applet.
+ *
+ * \par Example of how this function would be called:
+ *
+ * int result;\n
+ *
+ * result = net_delete_profile(profile_name);
+ *
+ * if (result == NET_ERR_NONE)
+ *
+******************************************************************************************/
+int net_reset_profile(int type, int sim_id);
+
+/*****************************************************************************************/
+
 /* net_delete_profile API function prototype
  * int net_delete_profile(const char* profile_name);
  */
@@ -376,6 +452,52 @@ int net_modify_profile(const char *profile_name, net_profile_info_t *prof_info);
 ******************************************************************************************/
 int net_get_profile_list(net_device_t device_type, net_profile_info_t **profile_list, int *count);
 
+/*****************************************************************************************/
+/**
+ * This function sets the default profile which provides the given cellular service.
+ *
+ * \par Sync (or) Async:
+ * This is a Synchronous API.
+ *
+ * \param[in]	profile_name    Profile Identifier.
+ *
+ * \par Prospective Clients:
+ * External Apps.
+ *
+******************************************************************************************/
+int net_set_default_cellular_service_profile(const char *profile_name);
+
+/*****************************************************************************************/
+/**
+ * This function sets the default profile which provides the given cellular service.
+ *
+ * \par Sync (or) Async:
+ * This is a Asynchronous API.
+ *
+ * \param[in]	profile_name    Profile Identifier.
+ *
+ * \par Prospective Clients:
+ * External Apps.
+ *
+******************************************************************************************/
+int net_set_default_cellular_service_profile_async(const char *profile_name);
+
+/*****************************************************************************************/
+/**
+ * This function gets the modem object path which provides the given subscriber id.
+ *
+ * \par Sync (or) Async:
+ * This is a Synchronous API.
+ *
+ * \param[in]	sim_id      Subscriber identity.
+ * \param[out]	modem_path  Multi-subscribers' object path. After use this, it should be free()
+ *
+ * \par Prospective Clients:
+ * External Apps.
+ *
+******************************************************************************************/
+int net_get_cellular_modem_object_path(char **modem_path, int sim_id);
+
 /**
  * \}
  */
@@ -385,5 +507,3 @@ int net_get_profile_list(net_device_t device_type, net_profile_info_t **profile_
 #endif /* __cplusplus */
 
 #endif
-
-

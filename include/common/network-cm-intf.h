@@ -1,30 +1,34 @@
 /*
- *  Network Client Library
+ * Network Client Library
  *
-* Copyright 2012  Samsung Electronics Co., Ltd
-
-* Licensed under the Flora License, Version 1.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-
-* http://www.tizenopensource.org/license
-
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
+ * Copyright 2012 Samsung Electronics Co., Ltd
+ *
+ * Licensed under the Flora License, Version 1.1 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.tizenopensource.org/license
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
  */
 
-
-#ifndef __NETWORK_CM_INTF_H__        /* To prevent inclusion of a header file twice */
+#ifndef __NETWORK_CM_INTF_H__
 #define __NETWORK_CM_INTF_H__
 
+#include "network-pm-intf.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
+
+#ifndef DEPRECATED
+#define DEPRECATED __attribute__((deprecated))
+#endif
 
 /**
  * @file network-cm-intf.h
@@ -35,42 +39,6 @@ extern "C" {
  * \addtogroup  common_basic
  * \{
 */
-
-/*==================================================================================================
-                                         INCLUDE FILES
-==================================================================================================*/
-
-
-#include <sys/time.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <string.h>
-
-#include <arpa/inet.h>
-#include <sys/socket.h>
-#include <netdb.h>
-#include <sys/un.h>
-#include <errno.h>
-
-#include <netinet/in.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdarg.h>
-
-#include <pthread.h>
-#include <signal.h>
-
-#include <sys/poll.h>
-
-#include <semaphore.h>
-#include <linux/unistd.h>
-
-#include "network-pm-intf.h"
-#include "network-cm-error.h"
-
-#ifndef DEPRECATED
-#define DEPRECATED __attribute__((deprecated))
-#endif
 
 /*==================================================================================================
                                            CONSTANTS
@@ -90,9 +58,9 @@ typedef enum
 	/** Open Connection Response Event*/
 	NET_EVENT_OPEN_RSP,
 
-	/** Close Connection Response Event*/ 
+	/** Close Connection Response Event*/
 	NET_EVENT_CLOSE_RSP,
-	
+
 	/** Open connection Indication (auto join) */
 	NET_EVENT_OPEN_IND,
 
@@ -109,7 +77,7 @@ typedef enum
 	/** Profile modify indication Event\n
 	 *  This is deprecated Event and maintained only for compatibility */
 	NET_EVENT_PROFILE_MODIFY_IND,
-	
+
 	/** Network configuration changed Event\n
 	 *  This is deprecated Event and maintained only for compatibility */
 	NET_EVENT_NET_CONFIGURE_RSP,
@@ -118,14 +86,14 @@ typedef enum
 
 	/** Wi-Fi interface Scan Response Event */
 	NET_EVENT_WIFI_SCAN_RSP,
-	
+
 	/** Wi-Fi interface Scan Indication Event(BG scan) */
 	NET_EVENT_WIFI_SCAN_IND,
 
 	/** Wi-Fi interface MAC changed Event\n
 	 *  This is deprecated Event and maintained only for compatibility */
 	NET_EVENT_WIFI_MAC_ID_IND,
-	
+
 	/** Wi-Fi interface Power On/Off Response Event */
 	NET_EVENT_WIFI_POWER_RSP,
 
@@ -141,6 +109,17 @@ typedef enum
 	/** Wi-Fi interface WPS Response Event */
 	NET_EVENT_WIFI_WPS_RSP,
 
+	/** Set default cellular profile Response Event */
+	NET_EVENT_CELLULAR_SET_DEFAULT_RSP,
+
+	/** Reset default cellular profile Response Event */
+	NET_EVENT_CELLULAR_RESET_DEFAULT_RSP,
+
+	/** Wi-Fi interface Scanning Indication Event*/
+	NET_EVENT_WIFI_SCANNING_IND,
+
+	/** Wi-Fi interface Scan Indication Event(WPS scan) */
+	NET_EVENT_WPS_SCAN_IND,
 } net_event_t;
 
 /**
@@ -171,10 +150,10 @@ typedef enum
  */
 typedef enum
 {
-	NET_STATISTICS_TYPE_LAST_RECEIVED_DATA = 0,  /**< Last received data */
-	NET_STATISTICS_TYPE_LAST_SENT_DATA = 1,  /**< Last sent data */
-	NET_STATISTICS_TYPE_TOTAL_RECEIVED_DATA = 2,  /**< Total received data */
-	NET_STATISTICS_TYPE_TOTAL_SENT_DATA = 3,  /**< Total sent data */
+	NET_STATISTICS_TYPE_LAST_RECEIVED_DATA = 0,		/**< Last received data */
+	NET_STATISTICS_TYPE_LAST_SENT_DATA = 1,			/**< Last sent data */
+	NET_STATISTICS_TYPE_TOTAL_RECEIVED_DATA = 2,	/**< Total received data */
+	NET_STATISTICS_TYPE_TOTAL_SENT_DATA = 3,		/**< Total sent data */
 } net_statistics_type_e;
 
 /**
@@ -209,9 +188,22 @@ typedef struct
 	void *		Data;
 } net_event_info_t;
 
+/**
+ * Technology properties
+ */
+
+typedef struct
+{
+	/** powered state */
+	char		powered;
+	/** connected state */
+	char		connected;
+} net_tech_info_t;
+
+
 /*****************************************************************************************/
 /* Callback function prototype
- * typedef void (*net_event_cb_t ) ( const net_event_info_t* net_event, void* user_data);
+ * typedef void (*net_event_cb_t)(const net_event_info_t* net_event, void* user_data);
  */
 
 /**
@@ -298,9 +290,17 @@ typedef struct
  *     - If the connection open successfully, application can get the connected profile information \n
  *       If the connection is failed to establish, net_profile_info_t also contains NULL value
  *
+ * - NET_EVENT_SPECIFIC_SCAN_IND \n
+ *     Response event for net_specific_scan_wifi() to notify the BSSs which are found.
+ *   - net_event->ProfileName : NULL (not used in this event)
+ *   - net_event->Error       : Its value will be NET_ERR_NONE in case of success and error cause in case of failure
+ *   - net_event->Data        : Pointer to GSList of struct ssid_scan_bss_info_t
+ *   - net_event->Datalength  : The number of BSSs which are found
+ *     - Do not delete and modify Data and Datalength and they are destroyed automatically
+ *
  */
 
-typedef void (*net_event_cb_t ) ( const net_event_info_t* net_event, void* user_data);
+typedef void (*net_event_cb_t)(const net_event_info_t* net_event, void* user_data);
 
 /*==================================================================================================
                                      FUNCTION PROTOTYPES
@@ -326,7 +326,7 @@ typedef void (*net_event_cb_t ) ( const net_event_info_t* net_event, void* user_
  *  None
  *
  * \param[in] event_cb     Application Callback function pointer to receive ConnMan events
- * \param[in] user_data    user data 
+ * \param[in] user_data    user data
  *
  * \par Async Response Message:
  *        None.
@@ -707,6 +707,78 @@ int net_get_active_netmask(net_addr_t *netmask);
 
 /*****************************************************************************************/
 /**
+ * \brief  This API returns ipv6 address of active(default) network profile.
+ *
+ * \par Sync (or) Async:
+ * These is a Synchronous API.
+ *
+ * \par Important Notes:
+ *  		On success, the information shall be copied to the parameter in each format.
+ *
+ * \param[out] 	ip_address6  ipv6 address of active(default) network profile.
+ *
+ * \par Precondition:
+ *        Application must already be registered with the CM server.
+ *
+ * \return Return Type (int) \n
+ * - NET_ERR_NONE  - indicating that the status of queried network interface is retrieved. \n
+ * - NET_ERR_APP_NOT_REGISTERED - indicating that client is not registered with CM and it cannot use CM services.\n
+ * - NET_ERR_UNKNOWN - indicating that an unknown error has occurred.\n
+ * - NET_ERR_INVALID_PARAM - indicating that API parameter value is invalid.\n
+ * - NET_ERR_NO_SERVICE - indicating that there is no active network.\n
+ *
+ * \par Prospective Clients:
+ * External Apps.
+ *
+ * \par Example Program:
+ *
+ * net_addr_t ip_address6;
+ *
+ * int result = net_get_active_ipaddress6(&ip_address6);
+ *
+ * if(result == NET_ERR_NONE)......
+ *
+******************************************************************************************/
+int net_get_active_ipaddress6(net_addr_t *ip_address6);
+
+/*****************************************************************************************/
+/**
+ * \brief  This API returns Prefix Length of IPv6 address of active(default) network profile.
+ *
+ * \par Sync (or) Async:
+ * These is a Synchronous API.
+ *
+ * \par Important Notes:
+ *  		On success, the information shall be copied to the parameter in each format.
+ *
+ * \param[out] 	prefixlen6  Prefix Length of IPv6 address of active(default) network profile.
+ *
+ * \par Precondition:
+ *        Application must already be registered with the CM server.
+ *
+ * \return Return Type (int) \n
+ * - NET_ERR_NONE  - indicating that the status of queried network interface is retrieved. \n
+ * - NET_ERR_APP_NOT_REGISTERED - indicating that client is not registered with CM and it cannot use CM services.\n
+ * - NET_ERR_UNKNOWN - indicating that an unknown error has occurred.\n
+ * - NET_ERR_INVALID_PARAM - indicating that API parameter value is invalid.\n
+ * - NET_ERR_NO_SERVICE - indicating that there is no active network.\n
+ *
+ * \par Prospective Clients:
+ * External Apps.
+ *
+ * \par Example Program:
+ *
+ * int prefixlen6;
+ *
+ * int result = net_get_active_prefixlen6(&prefixlen6);
+ *
+ * if(result == NET_ERR_NONE)......
+ *
+******************************************************************************************/
+int net_get_active_prefixlen6(int *prefixlen6);
+
+/*****************************************************************************************/
+/**
  * \brief  This API returns gateway address of active(default) network profile.
  *
  * \par Sync (or) Async:
@@ -740,6 +812,45 @@ int net_get_active_netmask(net_addr_t *netmask);
  *
 ******************************************************************************************/
 int net_get_active_gateway(net_addr_t *gateway);
+
+/*****************************************************************************************/
+/**
+ * \brief  This API returns gateway IPv6 address of active(default) network profile.
+ *
+ * \par Sync (or) Async:
+ * These is a Synchronous API.
+ *
+ * \par Important Notes:
+ *  		On success, the information shall be copied to the parameter in
+ *  		each format.
+ *
+ * \param[out] 	gateway6  gateway IPv6 address of active(default) network profile.
+ *
+ * \par Precondition:
+ *        Application must already be registered with the CM server.
+ *
+ * \return Return Type (int) \n
+ * - NET_ERR_NONE  - indicating that the status of queried network interface is
+ *   retrieved. \n
+ * - NET_ERR_APP_NOT_REGISTERED - indicating that client is not registered with
+ *   CM and it cannot use CM services.\n
+ * - NET_ERR_UNKNOWN - indicating that an unknown error has occurred.\n
+ * - NET_ERR_INVALID_PARAM - indicating that API parameter value is invalid.\n
+ * - NET_ERR_NO_SERVICE - indicating that there is no active network.\n
+ *
+ * \par Prospective Clients:
+ * External Apps.
+ *
+ * \par Example Program:
+ *
+ * net_addr_t gateway6;
+ *
+ * int result = net_get_active_gateway6(&gateway6);
+ *
+ * if(result == NET_ERR_NONE)......
+ *
+******************************************************************************************/
+int net_get_active_gateway6(net_addr_t *gateway6);
 
 /*****************************************************************************************/
 /**
@@ -985,10 +1096,61 @@ int net_deregister_client_ext(net_device_t client_type);
  * \brief 	This API is only for Connection/Wi-Fi CAPI. Don't use this.
  *
  * \param[in]  service_type specific service type
- * \param[out] profile_info The information of requested network profile.
+ * \param[out] prof_name    The name of profile for the service type.
  *
  ******************************************************************************************/
 int net_open_connection_with_preference_ext(net_service_type_t service_type, net_profile_name_t *prof_name);
+
+/**
+ * \brief 	This API is only for Connection CAPI. Don't use this.
+ *
+ * \param[in]  ip_addr     ip address to route.
+ * \param[in]  interface   interface name.
+ * \param[in]  address_family address family of ip address.
+ *
+ ******************************************************************************************/
+int net_add_route(const char *ip_addr, const char *interface, int address_family);
+
+/**
+ * \brief 	This API is only for Connection CAPI. Don't use this.
+ *
+ * \param[in]  ip_addr     ip address to route.
+ * \param[in]  interface   interface name.
+ * \param[in]  address_family address family of ip address.
+ *
+ ******************************************************************************************/
+int net_remove_route(const char *ip_addr, const char *interface, int address_family);
+
+/**
+ * \brief 	This API is only for Connection CAPI. Don't use this.
+ *
+ * \param[in]  ip_addr     ipv6 address to route.
+ * \param[in]  interface   interface name.
+ * \param[in]  address_family address family of ip address.
+ * \param[in]  gateway  gateway address.
+ *
+ ******************************************************************************************/
+int net_add_route_ipv6(const char *ip_addr, const char *interface, int address_family, const char *gateway);
+
+/**
+ * \brief 	This API is only for Connection CAPI. Don't use this.
+ *
+ * \param[in]  ip_addr     ipv6 address to route.
+ * \param[in]  interface   interface name.
+ * \param[in]  address_family address family of ip address.
+ * \param[in]  gateway  gateway address.
+ *
+ ******************************************************************************************/
+int net_remove_route_ipv6(const char *ip_addr, const char *interface, int address_family, const char *gateway);
+
+/**
+ * \brief 	This API is only for Connection CAPI. Don't use this.
+ *
+ * \param[in]  tech_type    specific technology type
+ * \param[out]  tech_info   technology info.
+ *
+ ******************************************************************************************/
+int net_get_technology_properties(net_device_t tech_type, net_tech_info_t *tech_info);
 
 /**
  * \}

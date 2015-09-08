@@ -1,25 +1,28 @@
 /*
- *  Network Client Library
+ * Network Client Library
  *
-* Copyright 2012  Samsung Electronics Co., Ltd
-
-* Licensed under the Flora License, Version 1.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-
-* http://www.tizenopensource.org/license
-
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
+ * Copyright 2012 Samsung Electronics Co., Ltd
+ *
+ * Licensed under the Flora License, Version 1.1 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.tizenopensource.org/license
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
  */
 
+#ifndef __NETWORK_WIFI_INTF_H__
+#define __NETWORK_WIFI_INTF_H__
 
-#ifndef __NETWORK_WIFI_INTF_H_
-#define __NETWORK_WIFI_INTF_H_
+#include <glib.h>
+
+#include "network-cm-intf.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -34,16 +37,6 @@ extern "C" {
  * \addtogroup  wifi_specific
  * \{
 */
-/*****************************************************************************
- * 	Standard headers
- *****************************************************************************/
-
-/*****************************************************************************
- * 	Platform headers
- *****************************************************************************/
-
-#include "network-pm-wlan.h"
-#include "network-cm-intf.h"
 
 /*****************************************************************************
  * 	Macros and Typedefs
@@ -59,19 +52,14 @@ extern "C" {
 * This enum indicates wifi state
 */
 typedef enum {
-	/** Unknown state */
-	WIFI_UNKNOWN = 0x00,
-	/** Wi-Fi is Off */
-	WIFI_OFF,
-	/** Wi-Fi is On(idle/failure) */
-	WIFI_ON,
-	/** Trying to connect(association/configuration) */
-	WIFI_CONNECTING,
-	/** Wi-Fi is connected to an AP(ready/online) */
-	WIFI_CONNECTED,
-	/** Trying to disconnect(connected, but disconnecting process is on going) */
-	WIFI_DISCONNECTING,
-} net_wifi_state_t; 
+	WIFI_UNKNOWN		= 0x00, /** Unknown state */
+	WIFI_OFF			= 0x01, /** Wi-Fi is Off */
+	WIFI_ON				= 0x02, /** Wi-Fi is On(idle/failure) */
+	WIFI_ASSOCIATION	= 0x03, /** Trying association */
+	WIFI_CONFIGURATION	= 0x04, /** Trying configuration */
+	WIFI_CONNECTED		= 0x05, /** Wi-Fi is connected */
+	WIFI_DISCONNECTING	= 0x06, /** Trying to disconnect */
+} net_wifi_state_t;
 
 /**
 *@enum net_wifi_background_scan_mode_t
@@ -99,7 +87,6 @@ typedef enum
 /*****************************************************************************
  * 	Global Structures
  *****************************************************************************/
-
 /**
  * This is the structure to connect with WPS network.
  */
@@ -123,7 +110,23 @@ typedef struct {
 
 	/** Security mode and authentication info */
 	wlan_security_info_t security_info;
+
+	/** Hidden network */
+	gboolean is_hidden;
 } net_wifi_connection_info_t;
+
+struct ssid_scan_bss_info_t {
+	char ssid[NET_WLAN_ESSID_LEN + 1];
+	wlan_security_mode_type_t security;
+	char wps;
+};
+
+struct wps_scan_bss_info_t {
+	unsigned char ssid[NET_WLAN_ESSID_LEN + 1];
+	char bssid[NET_WLAN_BSSID_LEN + 1];
+	int rssi;
+	int mode;
+};
 
 /*****************************************************************************
  * 	Typedefs 
@@ -139,7 +142,6 @@ typedef struct {
  * 	ConnMan Wi-Fi Client Interface Synchronous API Declaration
  *****************************************************************************/
 
-
 /**
  * @fn   int net_get_wifi_state(net_wifi_state_t *current_state, net_profile_name_t *profile_name)
  *
@@ -151,13 +153,12 @@ typedef struct {
  * @param[in]    none
  * @param[out]   current_state  Current wifi state
  * @param[out]   profile_name   Profile name of current Wi-Fi state\n
- *                              (valid for WIFI_CONNECTING, WIFI_CONNECTED, WIFI_DISCONNECTING state only)
- *
+ *                              (valid for WIFI_ASSOCIATION, WIFI_CONFIGURATION,\n
+ *                               WIFI_CONNECTED, WIFI_DISCONNECTING state only)
  * @return       NET_ERR_NONE on success, negative values for errors
  */
 
 int net_get_wifi_state(net_wifi_state_t *current_state, net_profile_name_t *profile_name);
-
 
 /**
  * @fn   int net_wifi_set_background_scan_mode(net_wifi_background_scan_mode_t scan_mode)
@@ -194,6 +195,53 @@ int net_wifi_set_background_scan_mode(net_wifi_background_scan_mode_t scan_mode)
 
 int net_specific_scan_wifi(const char *ssid);
 
+/**
+ * @fn   int net_wps_scan_wifi(void)
+ *
+ * This function sends scan request to NetConfig daemon,
+ *
+ * \par Sync (or) Async:
+ * This is Asynchronous API.
+ *
+ * @param[out]   none
+ *
+ * @return       NET_ERR_NONE on success, negative values for errors
+ */
+
+int net_wps_scan_wifi(void);
+
+/**
+ * @fn   int net_wifi_get_passpoint(int *enable)
+ *
+ * This function requests current passpoint on/off state to NetConfig daemon,
+ *
+ * \par Sync (or) Sync:
+ * This is Synchronous API.
+ *
+ * @param[in]	none
+ * @param[out]	enabled	passpoint on(1)/off(0)
+ *
+ * @return      NET_ERR_NONE on success, negative values for errors
+ */
+
+int net_wifi_get_passpoint(int *enable);
+
+/**
+ * @fn   int net_wifi_set_passpoint(int enable)
+ *
+ * This function sends passpoint on/off request to NetConfig daemon,
+ *
+ * \par Sync (or) Async:
+ * This is Asynchronous API.
+ *
+ * @param[in]    enable	passpoint on(1)/off(0)
+ * @param[out]   none
+ *
+ * @return       NET_ERR_NONE on success, negative values for errors
+ */
+
+int net_wifi_set_passpoint(int enable);
+
 /*****************************************************************************
  * 	ConnMan Wi-Fi Client Interface Asynchronous Function Declaration
  *****************************************************************************/
@@ -219,7 +267,6 @@ int net_specific_scan_wifi(const char *ssid);
 
 int net_open_connection_with_wifi_info(const net_wifi_connection_info_t *wifi_info);
 
-
 /**
  * @fn   int net_scan_wifi(void)
  *
@@ -242,16 +289,15 @@ int net_open_connection_with_wifi_info(const net_wifi_connection_info_t *wifi_in
 
 int net_scan_wifi(void);
 
-
 /**
- * @fn   int net_wifi_power_on(void)
+ * @fn   int net_wifi_power_on(gboolean wifi_picker_test)
  *
  * This function requests wifi power on.
  *
  * \par Sync (or) Async:
  * This is an Asynchronous API.
  *
- * @param[in]    none
+ * @param[in]    wifi_picker_test  whether wifi list popup(picker) display or not
  * @param[out]   none
  *
  * \par Async Response Message:
@@ -261,8 +307,7 @@ int net_scan_wifi(void);
  * @return       NET_ERR_NONE on success, negative values for errors
  */
 
-int net_wifi_power_on(void);
-
+int net_wifi_power_on(gboolean wifi_picker_test);
 
 /**
  * @fn   int net_wifi_power_off(void)
@@ -283,7 +328,6 @@ int net_wifi_power_on(void);
  */
 
 int net_wifi_power_off(void);
-
 
 /**
  * @fn   int net_wifi_enroll_wps(const char *profile_name, net_wifi_wps_info_t *wps_info)
@@ -307,6 +351,37 @@ int net_wifi_power_off(void);
 
 int net_wifi_enroll_wps(const char *profile_name, net_wifi_wps_info_t *wps_info);
 
+/**
+ * @fn   int net_check_get_privilege()
+ *
+ * This function checks get privilege (dummy function).
+ *
+ * \par Sync (or) Async:
+ * This is an Synchronous API.
+ *
+ * @param[out]   none
+ *
+ *
+ * @return       NET_ERR_NONE on success, negative values for errors
+ */
+
+int net_check_get_privilege();
+
+/**
+ * @fn   int net_check_profile_privilege()
+ *
+ * This function checks get privilege (dummy function).
+ *
+ * \par Sync (or) Async:
+ * This is an Synchronous API.
+ *
+ * @param[out]   none
+ *
+ *
+ * @return       NET_ERR_NONE on success, negative values for errors
+ */
+
+int net_check_profile_privilege();
 
 /**
  * \}
@@ -316,4 +391,4 @@ int net_wifi_enroll_wps(const char *profile_name, net_wifi_wps_info_t *wps_info)
 }
 #endif
 
-#endif /** __NETWORK_WIFI_INTF_H_ */
+#endif /** __NETWORK_WIFI_INTF_H__ */

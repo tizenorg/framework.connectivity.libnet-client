@@ -1,26 +1,28 @@
 /*
- *  Network Client Library
+ * Network Client Library
  *
-* Copyright 2012  Samsung Electronics Co., Ltd
-
-* Licensed under the Flora License, Version 1.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-
-* http://www.tizenopensource.org/license
-
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
+ * Copyright 2012 Samsung Electronics Co., Ltd
+ *
+ * Licensed under the Flora License, Version 1.1 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.tizenopensource.org/license
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
  */
-
 
 #ifndef __NETWORK_PM_CONFIG_H__
 #define __NETWORK_PM_CONFIG_H__
 
+#include <netinet/in.h>
+
+#include "network-cm-error.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -38,14 +40,6 @@ extern "C"
 */
 
 /*==================================================================================================
-                                         INCLUDE FILES
-==================================================================================================*/
-
-#include <netinet/in.h>
-
-#include "network-cm-error.h"
-
-/*==================================================================================================
                                            CONSTANTS
 ==================================================================================================*/
 
@@ -61,11 +55,17 @@ extern "C"
 /** Minimum length of IPv4 string type e.g., "0.0.0.0". This length does not include NULL in the last byte. */
 #define NETPM_IPV4_STR_LEN_MIN 7
 
+/** Maximum length of IPv6 string type e.g., "fe80:0000:0000:0000:a000:27ff:fe7a:65ea". This length does not include NULL in the last byte. */
+#define NETPM_IPV6_STR_LEN_MAX 39
+
+/** Minimum length of IPv6 string type e.g., "::". This length does not include NULL in the last byte. */
+#define NETPM_IPV6_STR_LEN_MIN 2
+
 /** This is for MCC + MNC string */
 #define NET_SIM_INFO_LEN 10
 
 /** Maximum length of username in PDP profile. (used in authentication parameters) [3GPP Defined variable] */
-#define NET_PDP_AUTH_USERNAME_LEN_MAX 32 
+#define NET_PDP_AUTH_USERNAME_LEN_MAX 32
 
 /** Maximum length of password in PDP profile (used in authentication parameters) [3GPP Defined variable] */
 #define NET_PDP_AUTH_PASSWORD_LEN_MAX 32
@@ -85,6 +85,11 @@ extern "C"
 /** Maximum length of MAC address  */
 #define	NET_MAX_MAC_ADDR_LEN 32
 
+/** Maximum length of IPv6 Privacy  ["enabled", "disabled", "preferred"]*/
+#define	NETPM_IPV6_MAX_PRIVACY_LEN 9
+
+/** Maximum length of IPv6 Prefix */
+#define	NETPM_IPV6_MAX_PREFIX_LEN 128
 /*==================================================================================================
                                              ENUMS
 ==================================================================================================*/
@@ -113,8 +118,11 @@ typedef enum
 	/** Ethernet device */
 	NET_DEVICE_ETHERNET = 0x5,
 
+	/** Bluetooth device */
+	NET_DEVICE_BLUETOOTH = 0x6,
+
 	/** Count of device type */
-	NET_DEVICE_MAX = 0x6,
+	NET_DEVICE_MAX = 0x7,
 } net_device_t;
 
 /**
@@ -123,7 +131,6 @@ typedef enum
  */
 typedef enum
 {
-
 	/** IPV4 Address type */
 	NET_ADDR_IPV4 = 0x0,
 
@@ -137,7 +144,6 @@ typedef enum
  */
 typedef enum
 {
-
 	/** No authentication */
 	NET_PDP_AUTH_NONE 	= 0x0,
 
@@ -155,7 +161,7 @@ typedef enum
 typedef enum
 {
 	/** Not defined */
-	NET_PROXY_TYPE_UNKNOWN	= 0x00, 
+	NET_PROXY_TYPE_UNKNOWN	= 0x00,
 	/** Direct connection */
 	NET_PROXY_TYPE_DIRECT = 0x01,
 	/** Auto configuration(Use PAC file)
@@ -185,22 +191,31 @@ typedef enum
 	*/
 	NET_SERVICE_MMS = 0x02,
 
-	/** Mobile WAP Type \n
-		Network connection is established in Cellular network for WAP \n
-	*/
-	NET_SERVICE_WAP = 0x03,
-
 	/** Prepaid Mobile Internet Type \n
 		Network connection is established in Cellular network for prepaid internet service.\n
 		This service supports to establish network connection in prepaid sim case\n
 	*/
-	NET_SERVICE_PREPAID_INTERNET = 0x04,
+	NET_SERVICE_PREPAID_INTERNET = 0x03,
 
 	/** Prepaid Mobile MMS Type \n
 		Network Connection is established in Cellular network for prepaid MMS service. \n
 		This profile supports to establish network connection in prepaid sim case\n
 	*/
-	NET_SERVICE_PREPAID_MMS = 0x05,
+	NET_SERVICE_PREPAID_MMS = 0x04,
+
+	/** Mobile Tethering Type \n
+		Network connection is established in Cellular network for Tethering \n
+	*/
+	NET_SERVICE_TETHERING = 0x05,
+
+	/** Specific application Type \n
+		Network connection is established in Cellular network for Specific applications \n
+	*/
+	NET_SERVICE_APPLICATION = 0x06,
+
+	/** Deprecated type
+	 */
+	NET_SERVICE_WAP = 0x06,
 } net_service_type_t;
 
 
@@ -225,6 +240,7 @@ typedef enum
 
 	/** Don't use any method */
 	NET_IP_CONFIG_TYPE_OFF,
+
 } net_ip_config_type_t;
 
 /*==================================================================================================
@@ -299,10 +315,14 @@ typedef struct
 	/** Device Name of the connection link */
 	char		DevName[NET_MAX_DEVICE_NAME_LEN+1];
 
-	/** Dns Server Address of the connection link */
+	/** IPv4 Dns Server Address of the connection link */
 	net_addr_t	DnsAddr[NET_DNS_ADDR_MAX];
-	/** No of DNS Address for the connection link */
+	/** IPv6 Dns Server Address of the connection link */
+	net_addr_t	DnsAddr6[NET_DNS_ADDR_MAX];
+	/** No of IPv4 DNS Address for the connection link */
 	int		DnsCount;
+	/** No of IPv6 DNS Address for the connection link */
+	int		DnsCount6;
 
 	/** Net IP configuration Type */
 	net_ip_config_type_t IpConfigType;
@@ -325,6 +345,23 @@ typedef struct
 
 	/** MAC address */
 	char			MacAddr[NET_MAX_MAC_ADDR_LEN+1];
+
+	/** Net IP configuration Type */
+	net_ip_config_type_t IpConfigType6;
+
+	/** IP Address for the connection link */
+	net_addr_t	IpAddr6;
+
+	/** Prefix Length for the connection link */
+	int	PrefixLen6;
+
+	/** Whether gateway address present or not */
+	char		BDefGateway6;
+	/** Gateway address */
+	net_addr_t	GatewayAddr6;
+
+	/** Privacy of the connection link */
+	char		Privacy6[NETPM_IPV6_MAX_PRIVACY_LEN+1];
 } net_dev_info_t;
 
 /**
@@ -336,5 +373,3 @@ typedef struct
 #endif /* __cplusplus */
 
 #endif
-
-

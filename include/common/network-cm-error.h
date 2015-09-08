@@ -1,26 +1,24 @@
 /*
- *  Network Client Library
+ * Network Client Library
  *
-* Copyright 2012  Samsung Electronics Co., Ltd
-
-* Licensed under the Flora License, Version 1.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-
-* http://www.tizenopensource.org/license
-
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
+ * Copyright 2012 Samsung Electronics Co., Ltd
+ *
+ * Licensed under the Flora License, Version 1.1 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.tizenopensource.org/license
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
  */
 
-
 #ifndef __NETWORK_CM_ERROR_H__
 #define __NETWORK_CM_ERROR_H__
-
 
 #ifdef __cplusplus
 extern "C" {
@@ -58,12 +56,6 @@ extern "C" {
 /**
  * \addtogroup  common_basic
  * \{
-*/
-
-/*
-==================================================================================================
-                                         INCLUDE FILES
-==================================================================================================
 */
 
 /*
@@ -149,9 +141,15 @@ typedef enum {
 	NET_ERR_UNKNOWN_METHOD = -791,
 	/** Operation is restricted */
 	NET_ERR_SECURITY_RESTRICTED = -790,
+	/** Already exists */
+	NET_ERR_ALREADY_EXISTS = -789,
 
 	/** WiFi driver on/off failed */
 	NET_ERR_WIFI_DRIVER_FAILURE = -699,
+	NET_ERR_WIFI_DRIVER_LOAD_INPROGRESS = -698,
+
+	/** Modem/SIM related */
+	NET_ERR_MODEM_INTERFACE_NOT_AVAIALABLE = -599,
 } net_err_t;
 
 /*
@@ -175,4 +173,3 @@ typedef enum {
 #endif
  
 #endif
-

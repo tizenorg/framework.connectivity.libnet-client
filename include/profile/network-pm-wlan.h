@@ -1,26 +1,28 @@
 /*
- *  Network Client Library
+ * Network Client Library
  *
-* Copyright 2012  Samsung Electronics Co., Ltd
-
-* Licensed under the Flora License, Version 1.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-
-* http://www.tizenopensource.org/license
-
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
+ * Copyright 2012 Samsung Electronics Co., Ltd
+ *
+ * Licensed under the Flora License, Version 1.1 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.tizenopensource.org/license
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *
  */
-
 
 #ifndef __NETWORK_PM_WLAN_H__
 #define __NETWORK_PM_WLAN_H__
 
+#include <glib.h>
+
+#include "network-pm-config.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -39,14 +41,6 @@ extern "C"
 
 /*
 ==================================================================================================
-                                         INCLUDE FILES
-==================================================================================================
-*/
-
-#include "network-pm-config.h"
-
-/*
-==================================================================================================
                                            CONSTANTS
 ==================================================================================================
 */
@@ -54,6 +48,8 @@ extern "C"
 /** Length of essid */
 #define NET_WLAN_ESSID_LEN      128
 
+/** Length of bssid */
+#define NET_WLAN_BSSID_LEN      17
 
 /** 
  * Length of WPS PIN code 
@@ -76,7 +72,6 @@ extern "C"
  */
 #define NETPM_WLAN_MAX_WEP_KEY_LEN        26
 
-
 /**
  * These lengths depends on authentication server being used,
  * In case of freeradius server Max allowed length for username/password is 255
@@ -84,6 +79,7 @@ extern "C"
  * Used by EAP-TLS, optional for EAP-TTLS and EAP-PEAP
  */
 #define NETPM_WLAN_USERNAME_LEN               50
+
 /**
  * These lengths depends on authentication server being used,
  * In case of freeradius server Max allowed length for username/password is 255
@@ -97,16 +93,19 @@ extern "C"
  * Used by EAP-TLS, optional for EAP-TTLS and EAP-PEAP
  */
 #define NETPM_WLAN_CA_CERT_FILENAME_LEN       50
+
 /**
  * length of Client Cert file name
  * Used by EAP-TLS, optional for EAP-TTLS and EAP-PEAP
  */
 #define NETPM_WLAN_CLIENT_CERT_FILENAME_LEN   50
+
 /**
  * length of private key file name
  * Used by EAP-TLS, optional for EAP-TTLS and EAP-PEAP
  */
 #define NETPM_WLAN_PRIVATE_KEY_FILENAME_LEN   50
+
 /**
  * length of Private key password
  * Used by EAP-TLS, optional for EAP-TTLS and EAP-PEAP
@@ -228,7 +227,6 @@ typedef struct
 	char essid[NET_WLAN_ESSID_LEN+1];
 } net_essid_t;
 
-
 /**
  * Below structure is used by WPA-PSK or WPA2-PSK
  * @remark To see the maximum length of PSK passphrase key.
@@ -240,7 +238,6 @@ typedef struct
 	char pskKey[NETPM_WLAN_MAX_PSK_PASSPHRASE_LEN + 1];
 } wlan_psk_info_t;
 
-
 /**
  * Below structure is used by WEP
  * @remark To see the maximum length of WEP key.
@@ -251,7 +248,6 @@ typedef struct
 	/** key value for WEP */
 	char wepKey[NETPM_WLAN_MAX_WEP_KEY_LEN + 1];
 } wlan_wep_info_t;
-
 
 /**
  * Below structure is used by EAP
@@ -271,7 +267,8 @@ typedef struct
 	/**
 	 * For EAP-TTLS and EAP-PEAP only ca_cert_filename[] can also be provided
 	 */
-	char ca_cert_filename[NETPM_WLAN_CA_CERT_FILENAME_LEN+1]; /* Used to authenticate server */
+	/* Used to authenticate server */
+	char ca_cert_filename[NETPM_WLAN_CA_CERT_FILENAME_LEN+1];
 	/** client certificate file name */
 	char client_cert_filename[NETPM_WLAN_CLIENT_CERT_FILENAME_LEN+1];
 	/** private key file name */
@@ -284,7 +281,6 @@ typedef struct
 	/** eap phase2 authentication type */
 	wlan_eap_auth_type_t eap_auth;
 } wlan_eap_info_t;
-
 
 /**
  * At any point of time only one security mechanism is supported
@@ -299,7 +295,6 @@ typedef union
 	/** eap Authentication */
 	wlan_eap_info_t eap;
 } wlan_auth_info_t;
-
 
 /**
  * This is main security information structure
@@ -316,7 +311,6 @@ typedef struct
 	/** If WPS is supported, then this property will be set to TRUE */
 	char wps_support;
 } wlan_security_info_t;
-
 
 /**
  * AP Profile information
@@ -341,9 +335,14 @@ typedef struct
 	wlan_connection_mode_type_t wlan_mode;
 	/** Security mode and authentication info */
 	wlan_security_info_t security_info;
+	/** Passpoint AP or not */
+	gboolean passpoint;
 
 	/** network information */
 	net_dev_info_t net_info;
+
+	/** Hidden network */
+	gboolean is_hidden;
 } net_wifi_profile_info_t;
 
 /**
@@ -355,5 +354,3 @@ typedef struct
 #endif /* __cplusplus */
 
 #endif /* __NETPM_WLAN_H__ */
-
-
