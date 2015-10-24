@@ -231,6 +231,16 @@ EXPORT_API int net_wps_scan_wifi(void)
 	__NETWORK_FUNC_EXIT__;
 	return Error;
 }
+EXPORT_API int net_get_wps_pin(char **wps_pin)
+{
+	net_err_t error = NET_ERR_NONE;
+	error = _net_dbus_get_wps_pin(wps_pin);
+
+	if (error != NET_ERR_NONE)
+		NETWORK_LOG(NETWORK_ERROR, "Failed to get wps pin : %d", error);
+
+	return error;
+}
 
 EXPORT_API int net_wifi_get_passpoint(int *enabled)
 {
@@ -638,6 +648,58 @@ EXPORT_API int net_wifi_enroll_wps(const char *profile_name, net_wifi_wps_info_t
 	return Error;
 }
 
+#if defined TIZEN_TV
+EXPORT_API int net_wifi_cancel_wps(void)
+{
+	__NETWORK_FUNC_ENTER__;
+
+	net_err_t Error = NET_ERR_NONE;
+	NETWORK_LOG(NETWORK_ERROR, "net_wifi_wps_cancel called\n");
+
+	if (g_atomic_int_get(&NetworkInfo.ref_count) == 0) {
+		NETWORK_LOG(NETWORK_ERROR, "Application is not registered\n");
+		__NETWORK_FUNC_EXIT__;
+		return NET_ERR_APP_NOT_REGISTERED;
+	}
+
+	if (request_table[NETWORK_REQUEST_TYPE_ENROLL_WPS].flag == FALSE) {
+		NETWORK_LOG(NETWORK_ERROR, "No pending call in progress\n");
+		__NETWORK_FUNC_EXIT__;
+		return NET_ERR_INVALID_OPERATION;
+	}
+
+	if (_net_get_wifi_state(&Error) != WIFI_ON) {
+		NETWORK_LOG(NETWORK_ERROR, "Wi-Fi is powered off!\n");
+		__NETWORK_FUNC_EXIT__;
+		return NET_ERR_INVALID_OPERATION;
+	}
+
+	if (_net_dbus_is_pending_call_used() == TRUE) {
+		NETWORK_LOG(NETWORK_ERROR, "pending call in progress\n");
+		__NETWORK_FUNC_EXIT__;
+		return NET_ERR_INVALID_OPERATION;
+	}
+
+	if(request_table[NETWORK_REQUEST_TYPE_ENROLL_WPS].ProfileName[0] != '\0') {
+		net_delete_profile(request_table[NETWORK_REQUEST_TYPE_ENROLL_WPS].ProfileName);
+	}
+
+	Error = _net_dbus_cancel_wps();
+	if (Error != NET_ERR_NONE) {
+		NETWORK_LOG(NETWORK_ERROR,
+			"Failed to request cancel WPS, Error [%s]\n",
+			_net_print_error(Error));
+	}
+
+	memset(&request_table[NETWORK_REQUEST_TYPE_ENROLL_WPS], 0,
+			sizeof(network_request_table_t));
+
+	__NETWORK_FUNC_EXIT__;
+	return Error;
+}
+#endif
+
+
 /*****************************************************************************
  * 	ConnMan Wi-Fi Client Interface Sync Function Definition
  *****************************************************************************/
@@ -737,3 +799,80 @@ EXPORT_API int net_check_profile_privilege()
 
 	return Error;
 }
+#if defined TIZEN_TV
+EXPORT_API int net_wifi_enroll_wps_without_ssid(net_wifi_wps_info_t *wps_info)
+{
+	__NETWORK_FUNC_ENTER__;
+
+	net_err_t Error = NET_ERR_NONE;
+
+	if (g_atomic_int_get(&NetworkInfo.ref_count) == 0) {
+		NETWORK_LOG(NETWORK_ERROR, "Application is not registered\n");
+		__NETWORK_FUNC_EXIT__;
+		return NET_ERR_APP_NOT_REGISTERED;
+	}
+
+	if (request_table[NETWORK_REQUEST_TYPE_ENROLL_WPS].flag == TRUE) {
+		NETWORK_LOG(NETWORK_ERROR, "Request in progress\n");
+		__NETWORK_FUNC_EXIT__;
+		return NET_ERR_IN_PROGRESS;
+	}
+
+	if (_net_get_wifi_state(&Error) != WIFI_ON) {
+		NETWORK_LOG(NETWORK_ERROR, "Wi-Fi is powered off!\n");
+		__NETWORK_FUNC_EXIT__;
+		return NET_ERR_INVALID_OPERATION;
+	}
+
+	if (_net_dbus_is_pending_call_used() == TRUE) {
+		NETWORK_LOG(NETWORK_ERROR, "pending call in progress\n");
+		__NETWORK_FUNC_EXIT__;
+		return NET_ERR_INVALID_OPERATION;
+	}
+
+	request_table[NETWORK_REQUEST_TYPE_ENROLL_WPS].flag = TRUE;
+
+	if (wps_info->type == WIFI_WPS_PBC) {
+		/* Look How to change the use of Connman agent */
+		Error = _net_dbus_set_agent_wps_pbc();
+		if (NET_ERR_NONE != Error) {
+			NETWORK_LOG(NETWORK_ERROR,
+				"_net_dbus_set_agent_wps_pbc() failed\n");
+			__NETWORK_FUNC_EXIT__;
+			return NET_ERR_INVALID_OPERATION;
+		}
+	} else if (wps_info->type == WIFI_WPS_PIN) {
+		Error = _net_dbus_set_agent_wps_pin(wps_info->pin);
+		if (NET_ERR_NONE != Error){
+			NETWORK_LOG(NETWORK_ERROR,
+					"_net_dbus_set_agent_wps_pin() failed\n");
+			__NETWORK_FUNC_EXIT__;
+			return NET_ERR_INVALID_OPERATION;
+		}
+	}else {
+		__NETWORK_FUNC_EXIT__;
+		return NET_ERR_INVALID_PARAM;
+	}
+
+	if(wps_info->type == WIFI_WPS_PBC) {
+		Error = _net_dbus_open_connection_without_ssid();
+	} else if(wps_info->type == WIFI_WPS_PIN) {
+		Error = _net_dbus_open_pin_connection_without_ssid(wps_info->pin);
+	}else{
+		__NETWORK_FUNC_EXIT__;
+		return NET_ERR_INVALID_PARAM;
+	}
+
+	if (Error != NET_ERR_NONE) {
+		NETWORK_LOG(NETWORK_ERROR,
+				"Failed to request open connection, Error [%s]\n",
+				_net_print_error(Error));
+
+		memset(&request_table[NETWORK_REQUEST_TYPE_ENROLL_WPS], 0,
+				sizeof(network_request_table_t));
+	}
+
+	__NETWORK_FUNC_EXIT__;
+	return Error;
+}
+#endif

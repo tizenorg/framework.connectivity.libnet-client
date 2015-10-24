@@ -325,7 +325,7 @@ static int __net_telephony_get_profile_list(net_profile_name_t **ProfileName,
 		result = _net_invoke_dbus_method(TELEPHONY_SERVICE, path,
 				TELEPHONY_MODEM_INTERFACE, "GetProfileList", NULL, &Error);
 		if (result == NULL) {
-			NETWORK_LOG(NETWORK_ERROR, "Failed to get profiles: %s", path);
+			NETWORK_LOG(NETWORK_LOW, "Failed to get profiles: %s", path);
 			continue;
 		}
 
@@ -726,6 +726,8 @@ static int __net_extract_ip(const gchar *value, net_addr_t *ipAddr)
 
 static int __net_extract_common_info(const char *key, GVariant *variant, net_profile_info_t* ProfInfo)
 {
+	__NETWORK_FUNC_ENTER__;
+
 	net_err_t Error = NET_ERR_NONE;
 	const gchar *subKey = NULL;
 	const gchar *value = NULL;
@@ -1059,6 +1061,7 @@ static int __net_extract_common_info(const char *key, GVariant *variant, net_pro
 		/* Do noting */
 	}
 
+	__NETWORK_FUNC_EXIT__;
 	return Error;
 }
 
@@ -1066,15 +1069,15 @@ static wlan_eap_type_t __convert_eap_type_from_string(const char *eap_type)
 {
 	if (eap_type == NULL)
 		return WLAN_SEC_EAP_TYPE_PEAP;
-	else if (g_str_equal(eap_type, "peap") == TRUE)
+	else if (g_strcmp0(eap_type, "peap") == 0)
 		return WLAN_SEC_EAP_TYPE_PEAP;
-	else if (g_str_equal(eap_type, "tls") == TRUE)
+	else if (g_strcmp0(eap_type, "tls") == 0)
 		return WLAN_SEC_EAP_TYPE_TLS;
-	else if (g_str_equal(eap_type, "ttls") == TRUE)
+	else if (g_strcmp0(eap_type, "ttls") == 0)
 		return WLAN_SEC_EAP_TYPE_TTLS;
-	else if (g_str_equal(eap_type, "sim") == TRUE)
+	else if (g_strcmp0(eap_type, "sim") == 0)
 		return WLAN_SEC_EAP_TYPE_SIM;
-	else if (g_str_equal(eap_type, "aka") == TRUE)
+	else if (g_strcmp0(eap_type, "aka") == 0)
 		return WLAN_SEC_EAP_TYPE_AKA;
 	else
 		return WLAN_SEC_EAP_TYPE_PEAP;
@@ -1084,17 +1087,17 @@ static wlan_eap_auth_type_t __convert_eap_auth_from_string(const char *eap_auth)
 {
 	if (eap_auth == NULL)
 		return WLAN_SEC_EAP_AUTH_NONE;
-	else if (g_str_equal(eap_auth, "NONE") == TRUE)
+	else if (g_strcmp0(eap_auth, "NONE") == 0)
 		return WLAN_SEC_EAP_AUTH_NONE;
-	else if (g_str_equal(eap_auth, "PAP") == TRUE)
+	else if (g_strcmp0(eap_auth, "PAP") == 0)
 		return WLAN_SEC_EAP_AUTH_PAP;
-	else if (g_str_equal(eap_auth, "MSCHAP") == TRUE)
+	else if (g_strcmp0(eap_auth, "MSCHAP") == 0)
 		return WLAN_SEC_EAP_AUTH_MSCHAP;
-	else if (g_str_equal(eap_auth, "MSCHAPV2") == TRUE)
+	else if (g_strcmp0(eap_auth, "MSCHAPV2") == 0)
 		return WLAN_SEC_EAP_AUTH_MSCHAPV2;
-	else if (g_str_equal(eap_auth, "GTC") == TRUE)
+	else if (g_strcmp0(eap_auth, "GTC") == 0)
 		return WLAN_SEC_EAP_AUTH_GTC;
-	else if (g_str_equal(eap_auth, "MD5") == TRUE)
+	else if (g_strcmp0(eap_auth, "MD5") == 0)
 		return WLAN_SEC_EAP_AUTH_MD5;
 	else
 		return WLAN_SEC_EAP_AUTH_NONE;
@@ -1236,6 +1239,9 @@ static int __net_extract_wifi_info(GVariantIter *array, net_profile_info_t* Prof
 				else if (g_strcmp0(value, "psk") == 0 &&
 						 Wlan->security_info.sec_mode < WLAN_SEC_MODE_WPA_PSK)
 					Wlan->security_info.sec_mode = WLAN_SEC_MODE_WPA_PSK;
+				else if (g_strcmp0(value, "ft_psk") == 0 &&
+					Wlan->security_info.sec_mode < WLAN_SEC_MODE_WPA_FT_PSK)
+					Wlan->security_info.sec_mode = WLAN_SEC_MODE_WPA_FT_PSK;
 				else if (g_strcmp0(value, "ieee8021x") == 0 &&
 						 Wlan->security_info.sec_mode < WLAN_SEC_MODE_IEEE8021X)
 					Wlan->security_info.sec_mode = WLAN_SEC_MODE_IEEE8021X;
@@ -1314,61 +1320,65 @@ static int __net_extract_wifi_info(GVariantIter *array, net_profile_info_t* Prof
 		} else if (g_strcmp0(key, "Frequency") == 0) {
 			Wlan->frequency = (unsigned int)g_variant_get_uint16(var);
 
-		} else if (g_str_equal(key, "EAP") == TRUE) {
+		} else if (g_strcmp0(key, "EAP") == 0) {
 			value = g_variant_get_string(var, NULL);
 
 			if (value != NULL)
 				Wlan->security_info.authentication.eap.eap_type =
 						__convert_eap_type_from_string(value);
 
-		} else if (g_str_equal(key, "Phase2") == TRUE) {
+		} else if (g_strcmp0(key, "Phase2") == 0) {
 			value = g_variant_get_string(var, NULL);
 
 			if (value != NULL)
 				Wlan->security_info.authentication.eap.eap_auth =
 						__convert_eap_auth_from_string(value);
 
-		} else if (g_str_equal(key, "Identity") == TRUE) {
+		} else if (g_strcmp0(key, "Identity") == 0) {
 			value = g_variant_get_string(var, NULL);
 
 			if (value != NULL)
 				g_strlcpy(Wlan->security_info.authentication.eap.username,
 						value, NETPM_WLAN_USERNAME_LEN+1);
 
-		} else if (g_str_equal(key, "Password") == TRUE) {
+		} else if (g_strcmp0(key, "Password") == 0) {
 			value = g_variant_get_string(var, NULL);
 
 			if (value != NULL)
 				g_strlcpy(Wlan->security_info.authentication.eap.password,
 						value, NETPM_WLAN_PASSWORD_LEN+1);
 
-		} else if (g_str_equal(key, "CACertFile") == TRUE) {
+		} else if (g_strcmp0(key, "CACertFile") == 0) {
 			value = g_variant_get_string(var, NULL);
 
 			if (value != NULL)
 				g_strlcpy(Wlan->security_info.authentication.eap.ca_cert_filename,
 						value, NETPM_WLAN_CA_CERT_FILENAME_LEN+1);
 
-		} else if (g_str_equal(key, "ClientCertFile") == TRUE) {
+		} else if (g_strcmp0(key, "ClientCertFile") == 0) {
 			value = g_variant_get_string(var, NULL);
 
 			if (value != NULL)
 				g_strlcpy(Wlan->security_info.authentication.eap.client_cert_filename,
 						value, NETPM_WLAN_CLIENT_CERT_FILENAME_LEN+1);
 
-		} else if (g_str_equal(key, "PrivateKeyFile") == TRUE) {
+		} else if (g_strcmp0(key, "PrivateKeyFile") == 0) {
 			value = g_variant_get_string(var, NULL);
 
 			if (value != NULL)
 				g_strlcpy(Wlan->security_info.authentication.eap.private_key_filename,
 						value, NETPM_WLAN_PRIVATE_KEY_FILENAME_LEN+1);
 
-		} else if (g_str_equal(key, "PrivateKeyPassphrase") == TRUE) {
+		} else if (g_strcmp0(key, "PrivateKeyPassphrase") == 0) {
 			value = g_variant_get_string(var, NULL);
 
 			if (value != NULL)
 				g_strlcpy(Wlan->security_info.authentication.eap.private_key_passwd,
 						value, NETPM_WLAN_PRIVATE_KEY_PASSWD_LEN+1);
+
+		} else if (g_strcmp0(key, "Keymgmt") == 0) {
+			Wlan->security_info.keymgmt = (unsigned int)g_variant_get_uint32(var);
+
 		} else
 			Error = __net_extract_common_info(key, var, ProfInfo);
 	}
@@ -1442,6 +1452,8 @@ static int __net_extract_mobile_info(GVariantIter *array, net_profile_info_t *Pr
 #endif
 		} else
 			Error = __net_extract_common_info(key, var, ProfInfo);
+			if(Error != NET_ERR_NONE)
+				NETWORK_LOG(NETWORK_ERROR, "fail to extract common info err(%d)", Error);
 	}
 
 	/* Get Specific info from telephony service */
@@ -1890,7 +1902,7 @@ static int __net_wifi_delete_profile(net_profile_name_t* WifiProfName,
 
 		message = _net_invoke_dbus_method(NETCONFIG_SERVICE,
 				NETCONFIG_WIFI_PATH, NETCONFIG_WIFI_INTERFACE,
-				"DeleteConfig", params, &Error);
+				"DeleteEapConfig", params, &Error);
 	} else if (passpoint == TRUE || WLAN_SEC_MODE_IEEE8021X != sec_mode) {
 		message = _net_invoke_dbus_method(CONNMAN_SERVICE,
 				WifiProfName->ProfileName,
@@ -1903,7 +1915,7 @@ static int __net_wifi_delete_profile(net_profile_name_t* WifiProfName,
 
 		message = _net_invoke_dbus_method(NETCONFIG_SERVICE,
 				NETCONFIG_WIFI_PATH, NETCONFIG_WIFI_INTERFACE,
-				"DeleteConfig", params, &Error);
+				"DeleteEapConfig", params, &Error);
 	}
 
 	if (message == NULL) {
@@ -1971,6 +1983,137 @@ static int __net_telephony_modify_profile(const char *ProfileName,
 	__NETWORK_FUNC_EXIT__;
 
 	return Error;
+}
+
+static int __net_modify_ethernet_profile(const char* ProfileName,
+		net_profile_info_t* ProfInfo, net_profile_info_t* exProfInfo)
+{
+	__NETWORK_FUNC_ENTER__;
+
+	net_err_t Error = NET_ERR_NONE;
+	int i = 0;
+	char profilePath[NET_PROFILE_NAME_LEN_MAX+1] = "";
+
+	net_dev_info_t *net_info = &(ProfInfo->ProfileInfo.Ethernet.net_info);
+	net_dev_info_t *ex_net_info = &(exProfInfo->ProfileInfo.Ethernet.net_info);
+
+	g_strlcpy(profilePath, ProfileName, NET_PROFILE_NAME_LEN_MAX+1);
+
+	/* Compare and Set 'Proxy' */
+	NETWORK_LOG(NETWORK_HIGH, "Proxy old:%d %s, new:%d %s\n",
+			ex_net_info->ProxyMethod,
+			ex_net_info->ProxyAddr,
+			net_info->ProxyMethod,
+			net_info->ProxyAddr);
+
+	if ((ex_net_info->ProxyMethod != net_info->ProxyMethod) ||
+		(g_strcmp0(ex_net_info->ProxyAddr, net_info->ProxyAddr) != 0)) {
+
+		Error = _net_dbus_set_proxy(ProfInfo, profilePath);
+
+		if (Error != NET_ERR_NONE) {
+			__NETWORK_FUNC_EXIT__;
+			return Error;
+		}
+	}
+
+	/* Compare and Set 'IPv4 addresses' */
+	char ip_buffer[NETPM_IPV4_STR_LEN_MAX+1] = "";
+	char netmask_buffer[NETPM_IPV4_STR_LEN_MAX+1] = "";
+	char gateway_buffer[NETPM_IPV4_STR_LEN_MAX+1] = "";
+	g_strlcpy(ip_buffer,
+			inet_ntoa(ex_net_info->IpAddr.Data.Ipv4),
+			NETPM_IPV4_STR_LEN_MAX + 1);
+
+	g_strlcpy(netmask_buffer,
+			inet_ntoa(ex_net_info->SubnetMask.Data.Ipv4),
+			NETPM_IPV4_STR_LEN_MAX + 1);
+
+	g_strlcpy(gateway_buffer,
+			inet_ntoa(ex_net_info->GatewayAddr.Data.Ipv4),
+			NETPM_IPV4_STR_LEN_MAX + 1);
+
+	NETWORK_LOG(NETWORK_HIGH, "IPv4 info old: type %d, IP: %s, netmask:"
+			" %s, gateway: %s\n", ex_net_info->IpConfigType,
+			ip_buffer,
+			netmask_buffer,
+			gateway_buffer);
+
+	g_strlcpy(ip_buffer,
+			inet_ntoa(net_info->IpAddr.Data.Ipv4),
+			NETPM_IPV4_STR_LEN_MAX + 1);
+
+	g_strlcpy(netmask_buffer,
+			inet_ntoa(net_info->SubnetMask.Data.Ipv4),
+			NETPM_IPV4_STR_LEN_MAX + 1);
+
+	g_strlcpy(gateway_buffer,
+			inet_ntoa(net_info->GatewayAddr.Data.Ipv4),
+			NETPM_IPV4_STR_LEN_MAX + 1);
+
+	NETWORK_LOG(NETWORK_HIGH, "IPv4 info new: type %d, IP: %s, netmask:"
+			" %s, gateway: %s\n", net_info->IpConfigType,
+			ip_buffer,
+			netmask_buffer,
+			gateway_buffer);
+
+	if ((ex_net_info->IpConfigType != net_info->IpConfigType) ||
+		(net_info->IpConfigType == NET_IP_CONFIG_TYPE_STATIC &&
+		 (net_info->IpAddr.Data.Ipv4.s_addr
+		 			!= ex_net_info->IpAddr.Data.Ipv4.s_addr ||
+		  net_info->SubnetMask.Data.Ipv4.s_addr
+		  			!= ex_net_info->SubnetMask.Data.Ipv4.s_addr ||
+		  net_info->GatewayAddr.Data.Ipv4.s_addr
+		  			!= ex_net_info->GatewayAddr.Data.Ipv4.s_addr))) {
+		Error = _net_dbus_set_profile_ipv4(ProfInfo, profilePath);
+
+		if (Error != NET_ERR_NONE) {
+			NETWORK_LOG(NETWORK_ERROR, "Failed to set IPv4\n");
+
+			__NETWORK_FUNC_EXIT__;
+			return Error;
+		}
+	}
+	/* Compare and Set 'DNS addresses' */
+	for (i = 0; i < net_info->DnsCount; i++) {
+		if (i >= NET_DNS_ADDR_MAX) {
+			net_info->DnsCount = NET_DNS_ADDR_MAX;
+			break;
+		}
+
+		if(net_info->DnsAddr[i].Type == NET_ADDR_IPV4) {
+			char old_dns[NETPM_IPV4_STR_LEN_MAX+1] = "";
+			char new_dns[NETPM_IPV4_STR_LEN_MAX+1] = "";
+			g_strlcpy(old_dns,
+				inet_ntoa(ex_net_info->DnsAddr[i].Data.Ipv4),
+				NETPM_IPV4_STR_LEN_MAX+1);
+			g_strlcpy(new_dns,
+				inet_ntoa(net_info->DnsAddr[i].Data.Ipv4),
+				NETPM_IPV4_STR_LEN_MAX+1);
+
+			NETWORK_LOG(NETWORK_HIGH, "IPv4 DNS Addr order: %d, old:"
+				"%s, new: %s\n", i, old_dns, new_dns);
+
+			if (net_info->DnsAddr[i].Data.Ipv4.s_addr !=
+				ex_net_info->DnsAddr[i].Data.Ipv4.s_addr)
+				break;
+		}
+
+	}
+
+	if (i < net_info->DnsCount) {
+		Error = _net_dbus_set_profile_dns(ProfInfo, profilePath);
+
+		if (Error != NET_ERR_NONE) {
+			NETWORK_LOG(NETWORK_ERROR, "Failed to set DNS\n");
+
+			__NETWORK_FUNC_EXIT__;
+			return Error;
+		}
+	}
+
+	__NETWORK_FUNC_EXIT__;
+	return NET_ERR_NONE;
 }
 
 static int __net_telephony_delete_profile(net_profile_name_t* PdpProfName)
@@ -2267,8 +2410,8 @@ static int __net_telephony_reset_profile(int type, int sim_id)
 	__NETWORK_FUNC_ENTER__;
 
 	net_err_t Error = NET_ERR_NONE;
-
 	char subscriber_id[3];
+
 	GSList *ModemPathList = NULL;
 	const char *path = NULL;
 	GSList *list = NULL;
@@ -2511,8 +2654,9 @@ EXPORT_API int net_modify_profile(const char* profile_name, net_profile_info_t* 
 
 	if (prof_info == NULL ||
 	    (exProfInfo.profile_type != NET_DEVICE_WIFI &&
-	     exProfInfo.profile_type != NET_DEVICE_CELLULAR)) {
-		NETWORK_LOG(NETWORK_ERROR, "Invalid Parameter");
+	     exProfInfo.profile_type != NET_DEVICE_CELLULAR &&
+	     exProfInfo.profile_type != NET_DEVICE_ETHERNET)) {
+		NETWORK_LOG(NETWORK_ERROR, "Invalid Parameter\n");
 		__NETWORK_FUNC_EXIT__;
 		return NET_ERR_INVALID_PARAM;
 	}
@@ -2521,6 +2665,8 @@ EXPORT_API int net_modify_profile(const char* profile_name, net_profile_info_t* 
 		Error = __net_modify_wlan_profile_info(profile_name, prof_info, &exProfInfo);
 	else if (exProfInfo.profile_type == NET_DEVICE_CELLULAR)
 		Error = __net_telephony_modify_profile(profile_name, prof_info, &exProfInfo);
+	else if (exProfInfo.profile_type == NET_DEVICE_ETHERNET)
+		Error = __net_modify_ethernet_profile(profile_name, prof_info, &exProfInfo);
 
 	if (Error != NET_ERR_NONE) {
 		NETWORK_LOG(NETWORK_ERROR,

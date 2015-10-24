@@ -196,6 +196,20 @@ int net_wifi_set_background_scan_mode(net_wifi_background_scan_mode_t scan_mode)
 int net_specific_scan_wifi(const char *ssid);
 
 /**
+ * @fn   int net_get_wps_pin(void)
+ *
+ * This function get wps pin
+ *
+ * \par Sync (or) Async:
+ * This is an Synchronous API.
+ *
+ * @param[out]   wps pin
+ *
+ * @return       NET_ERR_NONE on success, negative values for errors
+ */
+int net_get_wps_pin(char **wps_pin);
+
+/**
  * @fn   int net_wps_scan_wifi(void)
  *
  * This function sends scan request to NetConfig daemon,
@@ -242,6 +256,25 @@ int net_wifi_get_passpoint(int *enable);
 
 int net_wifi_set_passpoint(int enable);
 
+#if defined TIZEN_TV
+/**
+* @fn	int net_wifi_cancel_wps(void)
+*
+* This function  stops ongoing WPS Provisioning / disconnects
+*	connected access point.
+*
+* \par Sync (or) Async:
+* This is an Sync API.
+*
+* @param[in]	none
+* @param[out]	none
+*
+* @return	   NET_ERR_NONE on success, negative values for errors
+*/
+
+int net_wifi_cancel_wps(void);
+
+#endif
 /*****************************************************************************
  * 	ConnMan Wi-Fi Client Interface Asynchronous Function Declaration
  *****************************************************************************/
@@ -383,6 +416,28 @@ int net_check_get_privilege();
 
 int net_check_profile_privilege();
 
+#if defined TIZEN_TV
+/**
+ * @fn   int net_wifi_enroll_wps_without_ssid()
+ *
+ * This function sends enroll wps request to NetConfig daemon,
+ * with wps information.
+ *
+ * \par Sync (or) Async:
+ * This is an Asynchronous API.
+ *
+ * @param[in]    wps_info      wps type
+ * @param[out]   none
+ *
+ * \par Async Response Message:
+ *        NET_EVENT_WIFI_WPS_RSP : enroll wps response will be sent asynchronously to the App in the callback function registered.\n
+ *        refer to net_event_cb_t()
+ *
+ * @return       NET_ERR_NONE on success, negative values for errors
+ */
+int net_wifi_enroll_wps_without_ssid(net_wifi_wps_info_t *wps_info);
+
+#endif
 /**
  * \}
  */

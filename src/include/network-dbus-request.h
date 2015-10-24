@@ -63,6 +63,7 @@ extern "C" {
 #define CONNMAN_CONFIG_FIELD_CLIENT_CERT_FILE	"ClientCertFile"
 #define CONNMAN_CONFIG_FIELD_PVT_KEY_FILE		"PrivateKeyFile"
 #define CONNMAN_CONFIG_FIELD_PVT_KEY_PASSPHRASE	"PrivateKeyPassphrase"
+#define CONNMAN_CONFIG_FIELD_EAP_KEYMGMT_TYPE 	"KeymgmtType"
 
 /*****************************************************************************
  * 	Global Structures
@@ -82,6 +83,7 @@ typedef struct {
 	char *client_cert_file;
 	char *private_key_file;
 	char *private_key_password;
+	char *eap_keymgmt_type;
 	gboolean is_hidden;
 } net_wifi_connect_service_info_t;
 
@@ -91,8 +93,10 @@ typedef struct {
 int _net_dbus_scan_request(void);
 int _net_dbus_set_bgscan_mode(net_wifi_background_scan_mode_t mode);
 int _net_dbus_get_state(char* state);
+int _net_dbus_get_ethernet_cable_state(int *state);
 int _net_dbus_set_agent_passphrase_and_connect(
 		const char *passphrase, const char *profilename);
+int _net_dbus_get_wps_pin(char **wps_pin);
 int _net_dbus_set_agent_wps_pbc_and_connect(const char *profilename);
 int _net_dbus_set_agent_wps_pin_and_connect(
 		const char *wps_pin, const char *profilename);
@@ -111,7 +115,7 @@ GVariant *_net_invoke_dbus_method(const char *dest, const char *path,
 		GVariant *params, int *dbus_error);
 int _net_invoke_dbus_method_nonblock(const char *dest, const char *path,
 		const char *interface_name, const char *method,
-		GVariant *params,
+		GVariant *params, int timeout,
 		GAsyncReadyCallback notify_func);
 int _net_dbus_load_wifi_driver(gboolean wifi_picker_test);
 int _net_dbus_remove_wifi_driver(void);
@@ -125,6 +129,18 @@ int _net_dbus_wps_scan_request(void);
 int _net_dbus_set_default(const char* profile_name);
 int _net_dbus_get_passpoint(int *enabled);
 int _net_dbus_set_passpoint(int enable);
+#if defined TIZEN_TV
+int _net_dbus_cancel_wps(void);
+#endif
+
+#if defined TIZEN_TV
+int _net_dbus_open_connection_without_ssid();
+int _net_dbus_open_pin_connection_without_ssid(const char *pin);
+int _net_dbus_set_agent_wps_pbc(void);
+int _net_dbus_set_agent_wps_pin(const char *wps_pin);
+
+#endif
+
 
 #ifdef __cplusplus
 }

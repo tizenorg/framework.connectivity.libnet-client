@@ -70,6 +70,10 @@ extern "C" {
 #define NETCONFIG_WIFI_PATH				"/net/netconfig/wifi"
 #define NETCONFIG_STATISTICS_PATH		"/net/netconfig/network_statistics"
 
+#if defined TIZEN_TV
+#define NETCONFIG_TV_PROFILE_INTERFACE	NETCONFIG_SERVICE ".tv_profile"
+#endif
+
 #define TELEPHONY_SERVICE				"com.tcore.ps"
 #define TELEPHONY_MASTER_INTERFACE		TELEPHONY_SERVICE ".master"
 #define TELEPHONY_MODEM_INTERFACE		TELEPHONY_SERVICE ".modem"
@@ -121,10 +125,12 @@ extern "C" {
 #define CONNMAN_BLUETOOTH_SERVICE_PROFILE_PREFIX \
 									CONNMAN_PATH "/service/bluetooth_"
 
+/** Network related Daemon Signals */
 #define NETCONFIG_SIGNAL_POWERON_COMPLETED	"PowerOnCompleted"
 #define NETCONFIG_SIGNAL_POWEROFF_COMPLETED	"PowerOffCompleted"
 #define NETCONFIG_SIGNAL_SPECIFIC_SCAN_DONE	"SpecificScanCompleted"
 #define NETCONFIG_SIGNAL_WPS_SCAN_DONE		"WpsScanCompleted"
+#define NETCONFIG_SIGNAL_ETHERNET_CABLE_STATE	"EthernetCableState"
 
 #undef	LOG_TAG
 #define	LOG_TAG		"NET_CLIENT"
@@ -161,8 +167,8 @@ extern "C" {
 		} \
 	} while(0)
 
-#define __NETWORK_FUNC_ENTER__	/* NETWORK_LOG(NETWORK_LOW, "Entering (%s)", __func__) */
-#define __NETWORK_FUNC_EXIT__	/* NETWORK_LOG(NETWORK_LOW, "Quit (%s)", __func__) */
+#define __NETWORK_FUNC_ENTER__	/* NETWORK_LOG(NETWORK_LOW, "Entering (%s)", __func__)*/
+#define __NETWORK_FUNC_EXIT__	/* NETWORK_LOG(NETWORK_LOW, "Quit (%s)", __func__)*/
 
 /*****************************************************************************
  * 	Global Enums

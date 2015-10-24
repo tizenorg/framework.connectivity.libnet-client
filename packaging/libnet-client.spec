@@ -1,6 +1,6 @@
 Name:		libnet-client
 Summary:	Network Client library (Shared library)
-Version:	1.1.25
+Version:	1.1.42
 Release:	1
 Group:		System/Network
 License:	Flora-1.1
@@ -36,8 +36,12 @@ export DUALSIM_CFLAGS+=" -DTIZEN_DUALSIM_ENABLE"
 export WEARABLE_CFLAGS+=" -DTIZEN_WEARABLE"
 %endif
 
+%if "%{?tizen_profile_name}" == "tv"
+	export TIZEN_TV_CFLAGS+=" -DTIZEN_TV"
+%endif
+
 ./autogen.sh
-./configure --prefix=/usr
+./configure --prefix=/usr --libdir=%{_libdir}
 
 make %{?_smp_mflags}
 
@@ -50,7 +54,7 @@ mkdir -p %{buildroot}%{_datadir}/license
 cp LICENSE %{buildroot}%{_datadir}/license/libnet-client
 
 cd test
-cp -rf %{buildroot}/usr/lib/ ./
+cp -rf %{buildroot}%{_libdir}/ ./
 ./build.sh
 cd ..
 

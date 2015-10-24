@@ -30,6 +30,7 @@ static __thread int net_service_error = NET_ERR_NONE;
 static __thread guint gdbus_conn_subscribe_id_connman_state = 0;
 static __thread guint gdbus_conn_subscribe_id_connman_error = 0;
 static __thread guint gdbus_conn_subscribe_id_supplicant = 0;
+static __thread guint gdbus_conn_subscribe_id_netconfig_wifi = 0;
 static __thread guint gdbus_conn_subscribe_id_netconfig = 0;
 
 static int __net_handle_wifi_power_rsp(gboolean value)
@@ -299,7 +300,8 @@ static void __net_handle_state_ind(const char *profile_name,
 	__NETWORK_FUNC_EXIT__;
 }
 
-static void __net_handle_failure_ind(const char *profile_name)
+static void __net_handle_failure_ind(const char *profile_name,
+		net_device_t device_type)
 {
 	__NETWORK_FUNC_ENTER__;
 
@@ -349,7 +351,10 @@ static void __net_handle_failure_ind(const char *profile_name)
 	g_strlcpy(event_data.ProfileName,
 			profile_name, NET_PROFILE_NAME_LEN_MAX+1);
 
-	event_data.Error = net_service_error;
+	if(net_service_error != NET_ERR_NONE)
+		event_data.Error = net_service_error;
+	else
+		event_data.Error = NET_ERR_CONNECTION_CONNECT_FAILED;
 	event_data.Datalength = 0;
 	event_data.Data = NULL;
 
@@ -357,6 +362,9 @@ static void __net_handle_failure_ind(const char *profile_name)
 
 	NETWORK_LOG(NETWORK_ERROR, "State failure %d", event_data.Error);
 	_net_client_callback(&event_data);
+
+	/* Reseting the state back in case of failure state */
+	service_state_table[device_type] = NET_STATE_TYPE_IDLE;
 
 	__NETWORK_FUNC_EXIT__;
 }
@@ -414,6 +422,10 @@ static int __net_handle_service_state_changed(const gchar *sig_path,
 
 	switch (new_state) {
 	case NET_STATE_TYPE_IDLE:
+		if (device_type == NET_DEVICE_WIFI &&
+				NetworkInfo.wifi_state == WIFI_CONNECTED) {
+			NetworkInfo.wifi_state = WIFI_ON;
+		}
 	case NET_STATE_TYPE_ASSOCIATION:
 	case NET_STATE_TYPE_CONFIGURATION:
 		__net_handle_state_ind(sig_path, new_state);
@@ -563,7 +575,7 @@ static int __net_handle_service_state_changed(const gchar *sig_path,
 		break;
 	}
 	case NET_STATE_TYPE_FAILURE:
-		__net_handle_failure_ind(sig_path);
+		__net_handle_failure_ind(sig_path, device_type);
 		break;
 
 	default:
@@ -632,6 +644,39 @@ static int __net_handle_scan_done(GVariant *param)
 	return NET_ERR_NONE;
 }
 
+static int __net_handle_ethernet_cable_state_rsp(GVariant *param)
+{
+	GVariantIter *iter = NULL;
+	GVariant *value = NULL;
+	const char *key = NULL;
+	const gchar *sig_value = NULL;
+
+	g_variant_get(param, "(a{sv})", &iter);
+
+	while (g_variant_iter_loop(iter, "{sv}", &key, &value)) {
+		if (g_strcmp0(key, "key") == 0) {
+			sig_value = g_variant_get_string(value, NULL);
+			NETWORK_LOG(NETWORK_LOW, "Check Ethernet Monitor Result: %s",
+						sig_value);
+		}
+	}
+	g_variant_iter_free(iter);
+
+	net_event_info_t event_data;
+	if(g_strcmp0(sig_value, "ATTACHED") == 0) {
+			event_data.Event = NET_EVENT_ETHERNET_CABLE_ATTACHED;
+			event_data.Error = NET_ERR_NONE;
+	} else {
+			event_data.Event = NET_EVENT_ETHERNET_CABLE_DETACHED;
+			event_data.Error = NET_ERR_NONE;
+	}
+	event_data.Datalength = 0;
+	event_data.Data = NULL;
+
+	_net_client_callback(&event_data);
+	return NET_ERR_NONE;
+}
+
 static void __net_connman_service_signal_filter(GDBusConnection *conn,
 		const gchar *name, const gchar *path, const gchar *interface,
 		const gchar *sig, GVariant *param, gpointer user_data)
@@ -682,6 +727,14 @@ static void __net_netconfig_signal_filter(GDBusConnection *conn,
 		__net_handle_wifi_wps_scan_rsp(param);
 }
 
+static void __net_netconfig_network_signal_filter(GDBusConnection *conn,
+		const gchar *name, const gchar *path, const gchar *interface,
+		const gchar *sig, GVariant *param, gpointer user_data)
+{
+	if (g_strcmp0(sig, NETCONFIG_SIGNAL_ETHERNET_CABLE_STATE) == 0)
+		__net_handle_ethernet_cable_state_rsp(param);
+}
+
 /*****************************************************************************
  * 	Global Functions
  *****************************************************************************/
@@ -705,6 +758,8 @@ int _net_deregister_signal(void)
 						gdbus_conn_subscribe_id_connman_error);
 	g_dbus_connection_signal_unsubscribe(connection,
 						gdbus_conn_subscribe_id_supplicant);
+	g_dbus_connection_signal_unsubscribe(connection,
+						gdbus_conn_subscribe_id_netconfig_wifi);
 	g_dbus_connection_signal_unsubscribe(connection,
 						gdbus_conn_subscribe_id_netconfig);
 
@@ -745,7 +800,7 @@ int _net_subscribe_signal_wifi(void)
 			NULL);
 
 	/* Create net-config service connection */
-	gdbus_conn_subscribe_id_netconfig = g_dbus_connection_signal_subscribe(
+	gdbus_conn_subscribe_id_netconfig_wifi = g_dbus_connection_signal_subscribe(
 			connection,
 			NETCONFIG_SERVICE,
 			NETCONFIG_WIFI_INTERFACE,
@@ -758,11 +813,11 @@ int _net_subscribe_signal_wifi(void)
 			NULL);
 
 	if (gdbus_conn_subscribe_id_supplicant == 0 ||
-		gdbus_conn_subscribe_id_netconfig == 0) {
+		gdbus_conn_subscribe_id_netconfig_wifi == 0) {
 		NETWORK_LOG(NETWORK_ERROR, "Failed register signals "
-				"supplicant(%d), netconfig(%d)",
+				"supplicant(%d), netconfig_wifi(%d)",
 				gdbus_conn_subscribe_id_supplicant,
-				gdbus_conn_subscribe_id_netconfig);
+				gdbus_conn_subscribe_id_netconfig_wifi);
 		Error = NET_ERR_NOT_SUPPORTED;
 	}
 
@@ -815,19 +870,33 @@ int _net_register_signal(void)
 			NULL,
 			NULL);
 
+	/* Create net-config service connection for network */
+	gdbus_conn_subscribe_id_netconfig = g_dbus_connection_signal_subscribe(
+			connection,
+			NETCONFIG_SERVICE,
+			NETCONFIG_NETWORK_INTERFACE,
+			NULL,
+			NETCONFIG_NETWORK_PATH,
+			NULL,
+			G_DBUS_SIGNAL_FLAGS_NONE,
+			__net_netconfig_network_signal_filter,
+			NULL,
+			NULL);
+
 	if (gdbus_conn_subscribe_id_connman_state == 0 ||
-			gdbus_conn_subscribe_id_connman_error == 0) {
+		gdbus_conn_subscribe_id_connman_error == 0 ||
+		gdbus_conn_subscribe_id_netconfig == 0) {
 		NETWORK_LOG(NETWORK_ERROR, "Failed register signals "
-				"connman_state(%d) connman_error(%d)",
+				"connman_state(%d), connman_error(%d), netconfig(%d)",
 				gdbus_conn_subscribe_id_connman_state,
-				gdbus_conn_subscribe_id_connman_error);
+				gdbus_conn_subscribe_id_connman_error,
+				gdbus_conn_subscribe_id_netconfig);
 		Error = NET_ERR_NOT_SUPPORTED;
 	}
 
 	__NETWORK_FUNC_EXIT__;
 	return Error;
 }
-
 
 static int __net_get_all_tech_states(GVariant *msg, net_state_type_t *state_table)
 {
@@ -853,17 +922,14 @@ static int __net_get_all_tech_states(GVariant *msg, net_state_type_t *state_tabl
 				if (!data)
 					continue;
 
-				if (g_str_equal(path, CONNMAN_WIFI_TECHNOLOGY_PREFIX) == TRUE) {
+				if (g_strcmp0(path, CONNMAN_WIFI_TECHNOLOGY_PREFIX) == 0) {
 					*(state_table + NET_DEVICE_WIFI) = NET_STATE_TYPE_READY;
 					NetworkInfo.wifi_state = WIFI_CONNECTED;
-				} else if (g_str_equal(path, CONNMAN_CELLULAR_TECHNOLOGY_PREFIX)
-							== TRUE)
+				} else if (g_strcmp0(path, CONNMAN_CELLULAR_TECHNOLOGY_PREFIX) == 0)
 					*(state_table + NET_DEVICE_CELLULAR) = NET_STATE_TYPE_READY;
-				else if (g_str_equal(path, CONNMAN_ETHERNET_TECHNOLOGY_PREFIX)
-							== TRUE)
+				else if (g_strcmp0(path, CONNMAN_ETHERNET_TECHNOLOGY_PREFIX) == 0)
 					*(state_table + NET_DEVICE_ETHERNET) = NET_STATE_TYPE_READY;
-				else if (g_str_equal(path, CONNMAN_BLUETOOTH_TECHNOLOGY_PREFIX)
-							== TRUE)
+				else if (g_strcmp0(path, CONNMAN_BLUETOOTH_TECHNOLOGY_PREFIX) == 0)
 					*(state_table + NET_DEVICE_BLUETOOTH) = NET_STATE_TYPE_READY;
 				else
 					NETWORK_LOG(NETWORK_ERROR, "Invalid technology type");

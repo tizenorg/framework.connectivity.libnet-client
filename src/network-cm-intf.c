@@ -419,15 +419,6 @@ EXPORT_API int net_register_client_ext(net_event_cb_t event_cb, net_device_t cli
 		}
 	}
 
-	if (client_type == NET_DEVICE_DEFAULT) {
-		NetworkInfo.ClientEventCb_conn = event_cb;
-		NetworkInfo.user_data_conn = user_data;
-	} else if (client_type == NET_DEVICE_WIFI) {
-		_net_subscribe_signal_wifi();
-		NetworkInfo.ClientEventCb_wifi = event_cb;
-		NetworkInfo.user_data_wifi = user_data;
-	}
-
 	if (NetworkInfo.ref_count < 1) {
 		Error = _net_init_service_state_table();
 		if (Error != NET_ERR_NONE) {
@@ -436,6 +427,15 @@ EXPORT_API int net_register_client_ext(net_event_cb_t event_cb, net_device_t cli
 			__NETWORK_FUNC_EXIT__;
 			return Error;
 		}
+	}
+
+	if (client_type == NET_DEVICE_DEFAULT) {
+		NetworkInfo.ClientEventCb_conn = event_cb;
+		NetworkInfo.user_data_conn = user_data;
+	} else if (client_type == NET_DEVICE_WIFI) {
+		_net_subscribe_signal_wifi();
+		NetworkInfo.ClientEventCb_wifi = event_cb;
+		NetworkInfo.user_data_wifi = user_data;
 	}
 
 	__sync_fetch_and_add(&NetworkInfo.ref_count, 1);
@@ -1057,6 +1057,30 @@ EXPORT_API int net_remove_route_ipv6(const char *ip_addr, const char *interface,
 		return Error;
 	}
 
+	return Error;
+}
+
+/**
+ * @fn   EXPORT_API int net_get_ethernet_module(int *state)
+ *
+ * This function is to get ethernet plug in/out state.
+ * This is Sync API.
+ *
+ * @return       0 - on success, negative values for errors
+ * @param[in]    int *state - state of ethernet cable
+ * @param[out]   none
+ */
+EXPORT_API int net_get_ethernet_cable_state(int *state)
+{
+	__NETWORK_FUNC_ENTER__;
+	net_err_t Error = NET_ERR_NONE;
+
+	Error = _net_dbus_get_ethernet_cable_state(state);
+
+	if (Error != NET_ERR_NONE)
+		NETWORK_LOG(NETWORK_ERROR, "_net_dbus_get_ethernet_cable_state failed\n");
+
+	__NETWORK_FUNC_EXIT__;
 	return Error;
 }
 
